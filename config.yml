@@ -1,0 +1,7 @@
+urls:
+  house_price_estimates:
+    # - "https://homes.co.nz/address/auckland/ponsonby/1-example-street/XXXXX"
+    - "https://www.qv.co.nz/property-search/property-details/0000000/"
+    # - "https://www.propertyvalue.co.nz/auckland/auckland-city/ponsonby-1011/1-example-street-ponsonby-1011-00000000"
+    # - "https://www.realestate.co.nz/property/1-example-street-ponsonby-tasman-auckland/xxxxxxxx"
+    # - "https://www.oneroof.co.nz/property/auckland/ponsonby/1-example-street/XXXXX"
