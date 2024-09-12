@@ -1,0 +1,7 @@
+urls:
+  house_price_estimates:
+    # - "https://homes.co.nz/address/mapua/mapua/87-iwa-street/R4oNg"
+    - "https://www.qv.co.nz/property-search/property-details/3033605/"
+    # - "https://www.propertyvalue.co.nz/nelson-tasman/tasman-district/mapua-7005/87-iwa-street-mapua-7005-18088803"
+    # - "https://www.realestate.co.nz/property/87-iwa-street-mapua-tasman-nelson-bays/2czv1jqhk"
+    # - "https://www.oneroof.co.nz/property/nelson-bays/mapua/87-iwa-street/xgYuh"
