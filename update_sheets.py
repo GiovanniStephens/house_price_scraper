@@ -14,7 +14,7 @@ def authenticate_gs_client():
     creds_dict = json.loads(credentials_json)
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     print(creds_dict)
-    creds = ServiceAccountCredentials.from_json_keyfile_name(credentials_json, scope)
+    creds = ServiceAccountCredentials.from_json_keyfile_name(json.dump(creds_dict), scope)
     client = gspread.authorize(creds)
     return client
 
