@@ -1,7 +1,7 @@
 urls:
   house_price_estimates:
-    # - "https://homes.co.nz/address/mapua/mapua/87-iwa-street/R4oNg"
-    - "https://www.qv.co.nz/property-search/property-details/3033605/"
-    # - "https://www.propertyvalue.co.nz/nelson-tasman/tasman-district/mapua-7005/87-iwa-street-mapua-7005-18088803"
-    # - "https://www.realestate.co.nz/property/87-iwa-street-mapua-tasman-nelson-bays/2czv1jqhk"
-    # - "https://www.oneroof.co.nz/property/nelson-bays/mapua/87-iwa-street/xgYuh"
+    - "https://homes.co.nz/address/queenstown/lake-hayes/21-onslow-road/2jGzK"
+    - "https://www.qv.co.nz/property-search/property-details/2819859/"
+    - "https://www.propertyvalue.co.nz/otago/queenstown-lakes-district/lake-hayes-9304/21-onslow-road-lake-hayes-queenstown-9304-16113327"
+    - "https://www.realestate.co.nz/property/21-onslow-road-lake-hayes-estate-queenstown-central-otago-lakes-district/gv38bbgq"
+    - "https://www.oneroof.co.nz/property/central-otago-lakes-district/dalefieldwakatipu-basin/21-onslow-road/jf1Z9"
