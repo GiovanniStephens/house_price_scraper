@@ -43,7 +43,7 @@ jobs:
 
     - name: Run Scraper
       run: |
-        python your_script.py
+        python update_sheets.py
 
     - name: Archive Test Results
       if: failure()
