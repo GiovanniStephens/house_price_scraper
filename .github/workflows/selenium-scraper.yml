@@ -1,9 +1,14 @@
 name: Selenium House Price Scraper
 
 on:
+  schedule:
+    # Runs at 00:00 (midnight) UTC every day
+    - cron: '0 0 * * *'
+
   push:
     branches:
       - main
+
   pull_request:
     branches:
       - main
