@@ -8,7 +8,10 @@ import os
 
 
 def authenticate_gs_client():
-    credentials_json = os.environ.get("GSHEETS_CREDENTIALS")
+    try:
+        credentials_json = open("client_secret.json").read()
+    except FileNotFoundError:
+        credentials_json = os.environ.get("GSHEETS_CREDENTIALS")
     if not credentials_json:
         raise ValueError("Google Sheets credentials are not set in the environment variables")
     creds_dict = json.loads(credentials_json)
