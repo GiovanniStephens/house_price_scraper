@@ -39,6 +39,22 @@ def format_qv_prices(price):
     return price
 
 
+def format_property_value_prices(price):
+    price = price.replace("$", "")
+    price = format_homes_prices(price)
+    return price
+
+
+def format_realestate_prices(price):
+    price = format_property_value_prices(price)
+    return price
+
+
+def format_oneroof_prices(price):
+    price = format_property_value_prices(price)
+    return price
+
+
 def scrape_house_prices(driver, url):
     print(f"Scraping data from: {url}")
     driver.get(url)
@@ -58,17 +74,26 @@ def scrape_house_prices(driver, url):
             midpoint_price = driver.find_element(By.XPATH, '//*[@id="content"]/div/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div').text
             midpoint_price = format_qv_prices(midpoint_price)
         elif "propertyvalue.co.nz" in url:
-            # Logic to find data on propertyvalue.co.nz
-            midpoint_price = driver.find_element(By.CLASS_NAME, "property-value-class")  # Example class
-            print(f"PropertyValue.co.nz price: {midpoint_price.text}")
+            lower_price = driver.find_element(By.XPATH, '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]').text
+            upper_price = driver.find_element(By.XPATH, '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]').text
+            lower_price = format_property_value_prices(lower_price)
+            upper_price = format_property_value_prices(upper_price)
+            midpoint_price = (lower_price + upper_price) / 2
         elif "realestate.co.nz" in url:
-            # Logic to find data on realestate.co.nz
-            midpoint_price = driver.find_element(By.CLASS_NAME, "realestate-price-class")  # Example class
-            print(f"RealEstate.co.nz price: {midpoint_price.text}")
+            lower_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[2]/div[1]/section[1]/div[2]/div[1]/div[1]/div/div[1]/h4').text
+            midpoint_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[2]/div[1]/section[1]/div[2]/div[1]/div[1]/div/div[2]/h4').text
+            upper_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[2]/div[1]/section[1]/div[2]/div[1]/div[1]/div/div[3]/h4').text
+            lower_price = format_realestate_prices(lower_price)
+            midpoint_price = format_realestate_prices(midpoint_price)
+            upper_price = format_realestate_prices(upper_price)
         elif "oneroof.co.nz" in url:
             # Logic to find data on oneroof.co.nz
-            midpoint_price = driver.find_element(By.CLASS_NAME, "oneroof-price-class")  # Example class
-            print(f"OneRoof.co.nz price: {midpoint_price.text}")
+            lower_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[5]/section[1]/div[2]/div/section/aside[1]/div/div[1]/div/div[2]/div[1]').text
+            midpoint_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[5]/section[1]/div[2]/div/section/aside[1]/div/div[1]/div/div[4]/div[1]').text
+            upper_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[5]/section[1]/div[2]/div/section/aside[1]/div/div[1]/div/div[3]/div[1]').text
+            lower_price = format_oneroof_prices(lower_price)
+            midpoint_price = format_oneroof_prices(midpoint_price)
+            upper_price = format_oneroof_prices(upper_price)
         else:
             print("No scraping logic for this URL")
     except Exception as e:
@@ -76,17 +101,27 @@ def scrape_house_prices(driver, url):
     return midpoint_price, upper_price, lower_price
 
 
-def main():
+def scrape_all_house_prices():
     config = load_config()
     urls = config["urls"]["house_price_estimates"]
 
     driver = init_driver()
+    lower_price = None
+    upper_price = None
+    midpoint_price = None
+    values = []
     try:
         for url in urls:
-            scrape_house_prices(driver, url)
+            midpoint_price, upper_price, lower_price = scrape_house_prices(driver, url)
+            # Print the results
+            print(f"Midpoint Price: {midpoint_price}")
+            print(f"Upper Price: {upper_price}")
+            print(f"Lower Price: {lower_price}")
+            values.append([lower_price, midpoint_price, upper_price])
     finally:
         driver.quit()
+    return values
 
 
 if __name__ == "__main__":
-    main()
+    scrape_all_house_prices()
