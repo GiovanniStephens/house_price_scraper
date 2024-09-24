@@ -13,6 +13,7 @@ def authenticate_gs_client():
         raise ValueError("Google Sheets credentials are not set in the environment variables")
     creds_dict = json.loads(credentials_json)
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    print(creds_dict)
     creds = ServiceAccountCredentials.from_json_keyfile_name(creds_dict, scope)
     client = gspread.authorize(creds)
     return client
