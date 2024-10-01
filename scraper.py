@@ -4,6 +4,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 import platform
+import re
 
 
 def load_config():
@@ -23,6 +24,52 @@ def init_driver():
         print(f"Unsupported architecture: {system_architecture}")
         return None
     return driver
+
+def scrape_oneroof_prices(driver):
+    print("Scraping data from OneRoof...")
+    driver.implicitly_wait(10)  # Adjust based on page load times
+
+    midpoint_price = None
+    upper_price = None
+    lower_price = None
+    try:
+        # Try using CSS Selectors first
+        midpoint_price = find_element_css(driver, 'body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.left-1\\/2.-translate-x-1\\/2.hidden.md\\:block > div.text-3xl.font-bold.text-secondary.-mt-60.pb-22')
+        upper_price = find_element_css(driver, 'body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.right-0 > div.text-base.md\\:text-xl')
+        lower_price = find_element_css(driver, 'body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.left-0 > div.text-base.md\\:text-xl')
+        # If any price is not found via CSS, fall back to regex pattern
+        if not midpoint_price or not upper_price or not lower_price:
+            page_source = driver.page_source
+            prices = find_prices_with_regex(page_source)
+            if len(prices) >= 3:
+                lower_price, midpoint_price, upper_price = prices[:3]
+            else:
+                raise Exception("Could not find enough price data using regex fallback")
+        # Format the prices if found
+        if midpoint_price:
+            midpoint_price = format_oneroof_prices(midpoint_price)
+        if upper_price:
+            upper_price = format_oneroof_prices(upper_price)
+        if lower_price:
+            lower_price = format_oneroof_prices(lower_price)
+    except Exception as e:
+        print(f"Error scraping OneRoof: {e}")
+    return midpoint_price, upper_price, lower_price
+
+
+def find_element_css(driver, selector):
+    """Find element by CSS selector and return its text."""
+    try:
+        return driver.find_element(By.CSS_SELECTOR, selector).text
+    except Exception as e:
+        print(f"Failed to find element using CSS Selector: {selector}. Error: {e}")
+        return None
+
+
+def find_prices_with_regex(page_source):
+    """Find prices in the format of $X.XM using regex."""
+    pattern = re.compile(r'\$\d\.\d{1,2}M')
+    return pattern.findall(page_source)
 
 
 def format_homes_prices(price):
@@ -88,12 +135,7 @@ def scrape_house_prices(driver, url):
             upper_price = format_realestate_prices(upper_price)
         elif "oneroof.co.nz" in url:
             # Logic to find data on oneroof.co.nz
-            lower_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[5]/section[1]/div[2]/div/section/aside[1]/div/div[1]/div/div[2]/div[1]').text
-            midpoint_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[5]/section[1]/div[2]/div/section/aside[1]/div/div[1]/div/div[4]/div[1]').text
-            upper_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[5]/section[1]/div[2]/div/section/aside[1]/div/div[1]/div/div[3]/div[1]').text
-            lower_price = format_oneroof_prices(lower_price)
-            midpoint_price = format_oneroof_prices(midpoint_price)
-            upper_price = format_oneroof_prices(upper_price)
+            midpoint_price, upper_price, lower_price = scrape_oneroof_prices(driver)
         else:
             print("No scraping logic for this URL")
     except Exception as e:
