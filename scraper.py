@@ -141,8 +141,8 @@ def scrape_house_prices(driver, url):
         lower_price = None
         if "homes.co.nz" in url:
             midpoint_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]').text
-            upper_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[1]/div/span[2]').text
-            lower_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[2]/div/span[2]').text
+            lower_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[1]/div/span[2]').text
+            upper_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[2]/div/span[2]').text
             midpoint_price = format_homes_prices(midpoint_price)
             upper_price = format_homes_prices(upper_price)
             lower_price = format_homes_prices(lower_price)
