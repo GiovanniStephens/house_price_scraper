@@ -25,10 +25,9 @@ def init_driver():
         return None
     return driver
 
-def scrape_oneroof_prices(driver):
-    print("Scraping data from OneRoof...")
-    driver.implicitly_wait(10)  # Adjust based on page load times
 
+def scrape_oneroof_prices(driver):
+    driver.implicitly_wait(10)
     midpoint_price = None
     upper_price = None
     lower_price = None
@@ -54,6 +53,36 @@ def scrape_oneroof_prices(driver):
             lower_price = format_oneroof_prices(lower_price)
     except Exception as e:
         print(f"Error scraping OneRoof: {e}")
+    return midpoint_price, upper_price, lower_price
+
+
+def scrape_realestate_co_nz(driver):
+    driver.implicitly_wait(10)
+    midpoint_price = None
+    upper_price = None
+    lower_price = None
+    try:
+        # Try using updated CSS Selectors
+        midpoint_price = find_element_css(driver, 'body > div:nth-child(5) > main > div:nth-child(3) > div.lg\\:w-3\\/4.lg\\:pr-8.xl\\:pr-20 > section.mb-6.pb-6.border-slateGrey-200.border-b > div.mt-4 > div.mb-6.grid.grid-cols-3.md\\:grid-cols-4 > div.col-span-3.md\\:pr-6 > div > div:nth-child(2) > h4')
+        upper_price = find_element_css(driver, 'body > div:nth-child(5) > main > div:nth-child(3) > div.lg\\:w-3\\/4.lg\\:pr-8.xl\\:pr-20 > section.mb-6.pb-6.border-slateGrey-200.border-b > div.mt-4 > div.mb-6.grid.grid-cols-3.md\\:grid-cols-4 > div.col-span-3.md\\:pr-6 > div > div:nth-child(3) > h4')
+        lower_price = find_element_css(driver, 'body > div:nth-child(5) > main > div:nth-child(3) > div.lg\\:w-3\\/4.lg\\:pr-8.xl\\:pr-20 > section.mb-6.pb-6.border-slateGrey-200.border-b > div.mt-4 > div.mb-6.grid.grid-cols-3.md\\:grid-cols-4 > div.col-span-3.md\\:pr-6 > div > div:nth-child(1) > h4')
+        # If any price is not found via CSS, fall back to regex pattern
+        if not midpoint_price or not upper_price or not lower_price:
+            page_source = driver.page_source
+            prices = find_prices_with_regex(page_source)
+            if len(prices) >= 3:
+                lower_price, midpoint_price, upper_price = prices[:3]
+            else:
+                raise Exception("Could not find enough price data using regex fallback")
+        # Format the prices if found
+        if midpoint_price:
+            midpoint_price = format_realestate_prices(midpoint_price)
+        if upper_price:
+            upper_price = format_realestate_prices(upper_price)
+        if lower_price:
+            lower_price = format_realestate_prices(lower_price)
+    except Exception as e:
+        print(f"Error scraping RealEstate.co.nz: {e}")
     return midpoint_price, upper_price, lower_price
 
 
@@ -127,12 +156,8 @@ def scrape_house_prices(driver, url):
             upper_price = format_property_value_prices(upper_price)
             midpoint_price = (lower_price + upper_price) / 2
         elif "realestate.co.nz" in url:
-            lower_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[2]/div[1]/section[1]/div[2]/div[1]/div[1]/div/div[1]/h4').text
-            midpoint_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[2]/div[1]/section[1]/div[2]/div[1]/div[1]/div/div[2]/h4').text
-            upper_price = driver.find_element(By.XPATH, '/html/body/div[2]/main/div[2]/div[1]/section[1]/div[2]/div[1]/div[1]/div/div[3]/h4').text
-            lower_price = format_realestate_prices(lower_price)
-            midpoint_price = format_realestate_prices(midpoint_price)
-            upper_price = format_realestate_prices(upper_price)
+            # Logic to find data on realestate.co.nz
+            midpoint_price, upper_price, lower_price = scrape_realestate_co_nz(driver)
         elif "oneroof.co.nz" in url:
             # Logic to find data on oneroof.co.nz
             midpoint_price, upper_price, lower_price = scrape_oneroof_prices(driver)
