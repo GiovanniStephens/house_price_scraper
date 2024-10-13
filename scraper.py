@@ -41,7 +41,7 @@ def scrape_oneroof_prices(driver):
             page_source = driver.page_source
             prices = find_prices_with_regex(page_source)
             if len(prices) >= 3:
-                lower_price, midpoint_price, upper_price = prices[:3]
+                upper_price, midpoint_price, lower_price = prices[:3]
             else:
                 raise Exception("Could not find enough price data using regex fallback")
         # Format the prices if found
@@ -71,7 +71,7 @@ def scrape_realestate_co_nz(driver):
             page_source = driver.page_source
             prices = find_prices_with_regex(page_source)
             if len(prices) >= 3:
-                lower_price, midpoint_price, upper_price = prices[:3]
+                upper_price, midpoint_price, lower_price = prices[:3]
             else:
                 raise Exception("Could not find enough price data using regex fallback")
         # Format the prices if found
@@ -90,15 +90,16 @@ def find_element_css(driver, selector):
     """Find element by CSS selector and return its text."""
     try:
         return driver.find_element(By.CSS_SELECTOR, selector).text
-    except Exception as e:
-        print(f"Failed to find element using CSS Selector: {selector}. Error: {e}")
+    except Exception:
+        print(f"Failed to find element using CSS Selector: {selector}.")
         return None
 
 
 def find_prices_with_regex(page_source):
     """Find prices in the format of $X.XM using regex."""
     pattern = re.compile(r'\$\d\.\d{1,2}M')
-    return pattern.findall(page_source)
+    values = pattern.findall(page_source)
+    return values.sort(reverse=True)
 
 
 def format_homes_prices(price):
