@@ -61,28 +61,10 @@ def scrape_realestate_co_nz(driver):
     midpoint_price = None
     upper_price = None
     lower_price = None
-    try:
-        # Try using updated CSS Selectors
-        midpoint_price = find_element_css(driver, 'body > div:nth-child(5) > main > div:nth-child(3) > div.lg\\:w-3\\/4.lg\\:pr-8.xl\\:pr-20 > section.mb-6.pb-6.border-slateGrey-200.border-b > div.mt-4 > div.mb-6.grid.grid-cols-3.md\\:grid-cols-4 > div.col-span-3.md\\:pr-6 > div > div:nth-child(2) > h4')
-        upper_price = find_element_css(driver, 'body > div:nth-child(5) > main > div:nth-child(3) > div.lg\\:w-3\\/4.lg\\:pr-8.xl\\:pr-20 > section.mb-6.pb-6.border-slateGrey-200.border-b > div.mt-4 > div.mb-6.grid.grid-cols-3.md\\:grid-cols-4 > div.col-span-3.md\\:pr-6 > div > div:nth-child(3) > h4')
-        lower_price = find_element_css(driver, 'body > div:nth-child(5) > main > div:nth-child(3) > div.lg\\:w-3\\/4.lg\\:pr-8.xl\\:pr-20 > section.mb-6.pb-6.border-slateGrey-200.border-b > div.mt-4 > div.mb-6.grid.grid-cols-3.md\\:grid-cols-4 > div.col-span-3.md\\:pr-6 > div > div:nth-child(1) > h4')
-        # If any price is not found via CSS, fall back to regex pattern
-        if not midpoint_price or not upper_price or not lower_price:
-            page_source = driver.page_source
-            prices = find_prices_with_regex(page_source)
-            if len(prices) >= 3:
-                upper_price, midpoint_price, lower_price = prices[:3]
-            else:
-                raise Exception("Could not find enough price data using regex fallback")
-        # Format the prices if found
-        if midpoint_price:
-            midpoint_price = format_realestate_prices(midpoint_price)
-        if upper_price:
-            upper_price = format_realestate_prices(upper_price)
-        if lower_price:
-            lower_price = format_realestate_prices(lower_price)
-    except Exception as e:
-        print(f"Error scraping RealEstate.co.nz: {e}")
+    page_source = driver.page_source
+    prices = find_prices_with_regex(page_source)[:3]
+    formatted_prices = [format_realestate_prices(price) for price in prices]
+    lower_price, midpoint_price, upper_price = formatted_prices[:3]
     return midpoint_price, upper_price, lower_price
 
 
@@ -99,7 +81,7 @@ def find_prices_with_regex(page_source):
     """Find prices in the format of $X.XM using regex."""
     pattern = re.compile(r'\$\d\.\d{1,2}M')
     values = pattern.findall(page_source)
-    return values.sort(reverse=True)
+    return values
 
 
 def format_homes_prices(price):
