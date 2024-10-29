@@ -69,7 +69,6 @@ def scrape_realestate_co_nz(driver):
 
 
 def find_element_css(driver, selector):
-    """Find element by CSS selector and return its text."""
     try:
         return driver.find_element(By.CSS_SELECTOR, selector).text
     except Exception:
