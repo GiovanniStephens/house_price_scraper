@@ -2,6 +2,6 @@ urls:
   house_price_estimates:
     - "https://homes.co.nz/address/queenstown/lake-hayes/21-onslow-road/2jGzK"
     - "https://www.qv.co.nz/property-search/property-details/2819859/"
-    - "https://www.propertyvalue.co.nz/otago/queenstown-lakes-district/lake-hayes-9304/21-onslow-road-lake-hayes-queenstown-9304-16113327"
+    # - "https://www.propertyvalue.co.nz/otago/queenstown-lakes-district/lake-hayes-9304/21-onslow-road-lake-hayes-queenstown-9304-16113327"
     - "https://www.realestate.co.nz/property/21-onslow-road-lake-hayes-estate-queenstown-central-otago-lakes-district/gv38bbgq"
     - "https://www.oneroof.co.nz/property/central-otago-lakes-district/dalefieldwakatipu-basin/21-onslow-road/jf1Z9"
