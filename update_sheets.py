@@ -29,7 +29,7 @@ def insert_prices(prices, client):
     string = '=('
     for price in prices:
         string += f"{int(price)}+"
-    string += str(last_number) + ')/6'
+    string += str(last_number) + ')/' + str(len(prices) + 1)
     sheet_instance.update_acell("C49", string)
 
 
