@@ -1,10 +1,10 @@
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from gspread.utils import ValueRenderOption
-import scraper
-import re
 import json
+from oauth2client.service_account import ServiceAccountCredentials
 import os
+import re
+import scraper
 
 
 def authenticate_gs_client():
