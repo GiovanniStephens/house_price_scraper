@@ -136,7 +136,6 @@ def scrape_house_prices(driver, url):
             upper_price = driver.find_element(By.XPATH, '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]').text
             lower_price = format_property_value_prices(lower_price)
             upper_price = format_property_value_prices(upper_price)
-            midpoint_price = (lower_price + upper_price) / 2
         elif "realestate.co.nz" in url:
             # Logic to find data on realestate.co.nz
             midpoint_price, upper_price, lower_price = scrape_realestate_co_nz(driver)
