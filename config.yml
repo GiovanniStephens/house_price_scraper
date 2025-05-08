@@ -2,6 +2,6 @@ urls:
   house_price_estimates:
     - "https://homes.co.nz/address/auckland/ponsonby/123 Example Street/xxxxx"
     - "https://www.qv.co.nz/property-search/property-details/0000000/"
-    # - "https://www.propertyvalue.co.nz/otago/auckland-lakes-district/ponsonby-9304/123 Example Street-Ponsonby, Auckland-9304-00000000"
+    - "https://www.propertyvalue.co.nz/otago/auckland-lakes-district/ponsonby-9304/123 Example Street-Ponsonby, Auckland-9304-00000000"
     - "https://www.realestate.co.nz/property/123 Example Street-ponsonby-estate-auckland-central-otago-lakes-district/xxxxxxxx"
     - "https://www.oneroof.co.nz/property/central-otago-lakes-district/ponsonby-centralcentral-basin/123 Example Street/xxxxx"
