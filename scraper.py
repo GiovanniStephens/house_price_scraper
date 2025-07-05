@@ -18,8 +18,10 @@ def init_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     system_architecture = platform.machine()
-    if system_architecture == 'x86_64':
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    if system_architecture == "x86_64":
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()), options=options
+        )
     else:
         print(f"Unsupported architecture: {system_architecture}")
         return None
@@ -33,9 +35,18 @@ def scrape_oneroof_prices(driver):
     lower_price = None
     try:
         # Try using CSS Selectors first
-        midpoint_price = find_element_css(driver, 'body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.left-1\\/2.-translate-x-1\\/2.hidden.md\\:block > div.text-3xl.font-bold.text-secondary.-mt-60.pb-22')
-        upper_price = find_element_css(driver, 'body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.right-0 > div.text-base.md\\:text-xl')
-        lower_price = find_element_css(driver, 'body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.left-0 > div.text-base.md\\:text-xl')
+        midpoint_price = find_element_css(
+            driver,
+            "body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.left-1\\/2.-translate-x-1\\/2.hidden.md\\:block > div.text-3xl.font-bold.text-secondary.-mt-60.pb-22",
+        )
+        upper_price = find_element_css(
+            driver,
+            "body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.right-0 > div.text-base.md\\:text-xl",
+        )
+        lower_price = find_element_css(
+            driver,
+            "body > div.min-h-fill-screen.flex.flex-col > main > div.section-wrap.space-y-40.md\\:space-y-64.py-40.md\\:py-64 > section:nth-child(1) > div.mt-16.\\!mt-0 > div > section > aside.border.p-20.rounded-b-sm.md\\:border-0.md\\:p-0 > div > div.pt-110.pb-80.md\\:pt-80.md\\:pb-100 > div > div.text-center.font-medium.absolute.top-0.pt-10.left-0 > div.text-base.md\\:text-xl",
+        )
         # If any price is not found via CSS, fall back to regex pattern
         if not midpoint_price or not upper_price or not lower_price:
             page_source = driver.page_source
@@ -78,7 +89,7 @@ def find_element_css(driver, selector):
 
 def find_prices_with_regex(page_source):
     """Find prices in the format of $X.XM using regex."""
-    pattern = re.compile(r'\$\d\.\d{1,2}M')
+    pattern = re.compile(r"\$\d\.\d{1,2}M")
     values = pattern.findall(page_source)
     return values
 
@@ -122,18 +133,36 @@ def scrape_house_prices(driver, url):
         upper_price = None
         lower_price = None
         if "homes.co.nz" in url:
-            midpoint_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]').text
-            lower_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[1]/div/span[2]').text
-            upper_price = driver.find_element(By.XPATH, '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[2]/div/span[2]').text
+            midpoint_price = driver.find_element(
+                By.XPATH,
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]',
+            ).text
+            lower_price = driver.find_element(
+                By.XPATH,
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[1]/div/span[2]',
+            ).text
+            upper_price = driver.find_element(
+                By.XPATH,
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/div/homes-price-tag-simple[2]/div/span[2]',
+            ).text
             midpoint_price = format_homes_prices(midpoint_price)
             upper_price = format_homes_prices(upper_price)
             lower_price = format_homes_prices(lower_price)
         elif "qv.co.nz" in url:
-            midpoint_price = driver.find_element(By.XPATH, '//*[@id="content"]/div/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div').text
+            midpoint_price = driver.find_element(
+                By.XPATH,
+                '//*[@id="content"]/div/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div',
+            ).text
             midpoint_price = format_qv_prices(midpoint_price)
         elif "propertyvalue.co.nz" in url:
-            lower_price = driver.find_element(By.XPATH, '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]').text
-            upper_price = driver.find_element(By.XPATH, '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]').text
+            lower_price = driver.find_element(
+                By.XPATH,
+                '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]',
+            ).text
+            upper_price = driver.find_element(
+                By.XPATH,
+                '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]',
+            ).text
             lower_price = format_property_value_prices(lower_price)
             upper_price = format_property_value_prices(upper_price)
         elif "realestate.co.nz" in url:
