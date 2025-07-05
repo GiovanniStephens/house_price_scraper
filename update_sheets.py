@@ -13,33 +13,40 @@ def authenticate_gs_client():
     except FileNotFoundError:
         credentials_json = os.environ.get("GSHEETS_CREDENTIALS")
     if not credentials_json:
-        raise ValueError("Google Sheets credentials are not set in the environment variables")
+        raise ValueError(
+            "Google Sheets credentials are not set in the environment variables"
+        )
     creds_dict = json.loads(credentials_json)
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     return client
 
 
 def get_last_number(sheet_instance):
-    formula = sheet_instance.get("C49", value_render_option=ValueRenderOption.formula)[0][0]
-    last_number = re.findall(r'\d+', formula)[-2]
+    formula = sheet_instance.get("C49", value_render_option=ValueRenderOption.formula)[
+        0
+    ][0]
+    last_number = re.findall(r"\d+", formula)[-2]
     return last_number
 
 
 def insert_prices(prices, client):
-    sheet = client.open('Financial Position')
+    sheet = client.open("Financial Position")
     sheet_instance = sheet.get_worksheet(1)
     # last_number = get_last_number(sheet_instance)
-    string = '=('
+    string = "=("
     for price in prices:
         string += f"{int(price)}+"
     # string += str(last_number) + ')/' + str(len(prices) + 1)
-    string = string[:-1] + ')/' + str(len(prices))
+    string = string[:-1] + ")/" + str(len(prices))
     sheet_instance.update_acell("C49", string)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     client = authenticate_gs_client()
     values = scraper.scrape_all_house_prices()
     property_value_data = None
