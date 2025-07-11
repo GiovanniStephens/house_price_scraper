@@ -112,7 +112,7 @@ def find_element_css(driver, selector):
 
 def find_prices_with_regex(page_source):
     """Find prices in the format of $X.XM using regex."""
-    pattern = re.compile(r"\$\d{1,3}(?:,\d{3})*(?:\.\d+)?M?")
+    pattern = re.compile(r"\$\d\.\d{2})M")
     values = pattern.findall(page_source)
     return values
 
