@@ -149,7 +149,7 @@ def format_oneroof_prices(price):
 
 def scrape_house_prices(driver, url):
     print(f"Scraping data from: {url}")
-    driver.safe_get(url)
+    safe_get(driver, url)
     driver.implicitly_wait(10)  # Adjust this based on page load times
     try:
         midpoint_price = None
