@@ -3,6 +3,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import platform
 import re
 
@@ -26,6 +28,27 @@ def init_driver():
         print(f"Unsupported architecture: {system_architecture}")
         return None
     return driver
+
+
+def wait_for_page_load(driver, timeout=15):
+    try:
+        WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, 'body'))
+        )
+    except Exception as e:
+        print("Timeout waiting for page body to load.")
+
+
+def safe_get(driver, url, retries=3, delay=5):
+    for i in range(retries):
+        try:
+            driver.get(url)
+            wait_for_page_load(driver)
+            return True
+        except Exception as e:
+            print(f"Attempt {i+1} failed for URL: {url} with error: {e}")
+            time.sleep(delay)
+    raise Exception(f"Failed to load {url} after {retries} retries")
 
 
 def scrape_oneroof_prices(driver):
@@ -89,7 +112,7 @@ def find_element_css(driver, selector):
 
 def find_prices_with_regex(page_source):
     """Find prices in the format of $X.XM using regex."""
-    pattern = re.compile(r"\$\d\.\d{1,2}M")
+    pattern = re.compile(r"\$\d{1,3}(?:,\d{3})*(?:\.\d+)?M?")
     values = pattern.findall(page_source)
     return values
 
@@ -126,7 +149,7 @@ def format_oneroof_prices(price):
 
 def scrape_house_prices(driver, url):
     print(f"Scraping data from: {url}")
-    driver.get(url)
+    driver.safe_get(url)
     driver.implicitly_wait(10)  # Adjust this based on page load times
     try:
         midpoint_price = None
