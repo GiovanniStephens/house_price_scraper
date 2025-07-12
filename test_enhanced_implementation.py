@@ -37,9 +37,10 @@ class TestEnhancedScrapeHousePrices(unittest.TestCase):
         # Set up mock driver with homes.co.nz content
         self.mock_driver.current_url = "https://homes.co.nz/test"
         self.mock_driver.elements = {
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]': MockElement(
-                "$1.2M"
-            )
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            ): MockElement("$1.2M"),
         }
 
         result = scrape_house_prices(
@@ -59,9 +60,10 @@ class TestEnhancedScrapeHousePrices(unittest.TestCase):
     def test_enhanced_scraping_with_validation(self):
         """Test enhanced scraping with price validation enabled"""
         self.mock_driver.elements = {
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]': MockElement(
-                "$1.2M"
-            )
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            ): MockElement("$1.2M"),
         }
 
         result = scrape_house_prices(
@@ -83,9 +85,10 @@ class TestEnhancedScrapeHousePrices(unittest.TestCase):
             log_file = f.name
 
         self.mock_driver.elements = {
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]': MockElement(
-                "$1.2M"
-            )
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            ): MockElement("$1.2M"),
         }
 
         # Override the default logger to use our temp file
@@ -122,7 +125,10 @@ class TestEnhancedScrapeHousePrices(unittest.TestCase):
         """Test that scraping falls back through strategies"""
         # First strategy fails, second succeeds
         self.mock_driver.failing_selectors = [
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]'
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            )
         ]
         self.mock_driver.elements = {
             "[data-testid='price-estimate-main']": MockElement("$1.5M")
@@ -174,12 +180,8 @@ class TestEnhancedScrapeHousePrices(unittest.TestCase):
     def test_enhanced_scraping_propertyvalue_special_case(self):
         """Test PropertyValue.co.nz special case where midpoint is set to None"""
         self.mock_driver.elements = {
-            '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]': MockElement(
-                "$1.0M"
-            ),
-            '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]': MockElement(
-                "$1.4M"
-            ),
+            '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]': MockElement("$1.0M"),
+            '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]': MockElement("$1.4M"),
         }
 
         result = scrape_house_prices(
@@ -221,9 +223,10 @@ class TestEnhancedScrapingIntegration(unittest.TestCase):
         """Test that scrape_with_retry works with enhanced parameters"""
         mock_driver = MockWebDriver()
         mock_driver.elements = {
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]': MockElement(
-                "$1.2M"
-            )
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            ): MockElement("$1.2M"),
         }
 
         result = scrape_with_retry(
@@ -410,9 +413,10 @@ class TestPerformanceAndStability(unittest.TestCase):
         """Test that scraping meets performance benchmarks"""
         mock_driver = MockWebDriver()
         mock_driver.elements = {
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]': MockElement(
-                "$1.2M"
-            )
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            ): MockElement("$1.2M"),
         }
 
         # Test multiple scrapings for performance
@@ -442,9 +446,10 @@ class TestPerformanceAndStability(unittest.TestCase):
 
         mock_driver = MockWebDriver()
         mock_driver.elements = {
-            '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/homes-price-tag-simple/div/span[2]': MockElement(
-                "$1.2M"
-            )
+            (
+                '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
+                'div[1]/homes-price-tag-simple/div/span[2]'
+            ): MockElement("$1.2M"),
         }
 
         # Perform many operations
