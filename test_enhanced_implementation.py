@@ -8,27 +8,20 @@ import unittest
 import time
 import tempfile
 import os
-import logging
-from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
 from scraper import (
     scrape_house_prices,
     scrape_all_house_prices,
     scrape_with_retry,
     SelectorStrategy,
-    SELECTOR_STRATEGIES,
     PriceValidator,
-    ValidationResult,
     ScrapingLogger,
     ScrapingResult,
-    RateLimiter,
     calculate_metrics,
     ScrapingMetrics,
     check_driver_health,
     ensure_driver_health,
     format_price_by_site,
-    ConfigurationError,
-    load_config,
     find_prices_with_regex,
 )
 
@@ -104,7 +97,7 @@ class TestEnhancedScrapeHousePrices(unittest.TestCase):
         ScrapingLogger.__init__ = temp_init
 
         try:
-            result = scrape_house_prices(
+            _ = scrape_house_prices(
                 self.mock_driver,
                 "https://homes.co.nz/test",
                 validate_prices=False,
