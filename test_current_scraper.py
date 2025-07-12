@@ -167,7 +167,7 @@ class TestCurrentScraperLimitations(unittest.TestCase):
         # This test is no longer valid - the scraper now uses SELECTOR_STRATEGIES
         # instead of hardcoded selectors directly in the function
         from scraper import SELECTOR_STRATEGIES
-        
+
         # Verify that strategies exist (this is the new approach)
         self.assertIn("homes.co.nz", SELECTOR_STRATEGIES)
         self.assertIn("mat-tab-content", str(SELECTOR_STRATEGIES["homes.co.nz"]))
@@ -178,7 +178,7 @@ class TestCurrentScraperLimitations(unittest.TestCase):
         # This test is no longer valid - the scraper now uses explicit waits
         # Check that explicit wait functions exist instead
         from scraper import wait_for_element, wait_for_price_elements
-        
+
         # Verify explicit wait functions exist
         self.assertTrue(callable(wait_for_element))
         self.assertTrue(callable(wait_for_price_elements))
@@ -188,12 +188,12 @@ class TestCurrentScraperLimitations(unittest.TestCase):
         # This test is no longer valid - the scraper now has comprehensive logging
         # Check that logging functionality exists instead
         from scraper import ScrapingLogger
-        
+
         # Verify comprehensive logging exists
         logger = ScrapingLogger()
-        self.assertTrue(hasattr(logger, 'log_extraction_attempt'))
-        self.assertTrue(hasattr(logger, 'log_price_extraction'))
-        self.assertTrue(hasattr(logger, 'log_scraping_result'))
+        self.assertTrue(hasattr(logger, "log_extraction_attempt"))
+        self.assertTrue(hasattr(logger, "log_price_extraction"))
+        self.assertTrue(hasattr(logger, "log_scraping_result"))
 
     def test_current_scraper_has_price_validation(self):
         """Test that current scraper now has price validation"""
@@ -268,13 +268,15 @@ class TestConfigurationStructure(unittest.TestCase):
         # Some URLs might use property IDs instead of addresses
         property_identifiers = [
             "123 Example Street",
-            "123%20example", 
+            "123%20example",
             "0000000",  # QV property ID for this property
         ]
-        
+
         for url in urls:
             url_lower = url.lower()
-            has_identifier = any(identifier in url_lower for identifier in property_identifiers)
+            has_identifier = any(
+                identifier in url_lower for identifier in property_identifiers
+            )
             self.assertTrue(
                 has_identifier,
                 f"URL does not appear to be for test property: {url}",

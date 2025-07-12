@@ -19,7 +19,6 @@ from typing import Optional, List, Dict
 from functools import wraps
 
 
-# Multi-Strategy Selector System (Phase 1.1)
 SELECTOR_STRATEGIES = {
     "homes.co.nz": {
         "midpoint": [
@@ -27,7 +26,7 @@ SELECTOR_STRATEGIES = {
                 "type": "xpath",
                 "selector": (
                     '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[1]/'
-                    'homes-price-tag-simple/div/span[2]'
+                    "homes-price-tag-simple/div/span[2]"
                 ),
             },
             {"type": "css", "selector": "[data-testid='price-estimate-main']"},
@@ -40,7 +39,7 @@ SELECTOR_STRATEGIES = {
                 "type": "xpath",
                 "selector": (
                     '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/div[2]/'
-                    'div/homes-price-tag-simple[2]/div/span[2]'
+                    "div/homes-price-tag-simple[2]/div/span[2]"
                 ),
             },
             {"type": "css", "selector": "[data-testid='price-estimate-upper']"},
@@ -53,7 +52,7 @@ SELECTOR_STRATEGIES = {
                 "type": "xpath",
                 "selector": (
                     '//*[@id="mat-tab-content-0-0"]/div/div[2]/div[1]/homes-hestimate-tab/'
-                    'div[2]/div/homes-price-tag-simple[1]/div/span[2]'
+                    "div[2]/div/homes-price-tag-simple[1]/div/span[2]"
                 ),
             },
             {"type": "css", "selector": "[data-testid='price-estimate-lower']"},
@@ -317,7 +316,6 @@ def load_config():
     return config
 
 
-# Explicit Wait System (Phase 1.2)
 def wait_for_element(driver, selector, timeout=15):
     """Wait for element with exponential backoff"""
     wait = WebDriverWait(driver, timeout)
@@ -334,7 +332,6 @@ def wait_for_price_elements(driver, selectors, timeout=20):
     raise TimeoutException("No price elements found")
 
 
-# Cross-Platform WebDriver Support (Phase 1.3)
 class UnsupportedPlatformError(Exception):
     """Raised when platform is not supported"""
 
@@ -377,7 +374,6 @@ def init_driver():
     return driver
 
 
-# Price Validation System (Phase 2.1)
 @dataclass
 class ValidationResult:
     """Result of price validation"""
@@ -447,7 +443,6 @@ class PriceValidator:
         return prices == sorted_prices  # Prices should be in ascending order
 
 
-# Enhanced Error Handling & Logging (Phase 2.2)
 @dataclass
 class ScrapingResult:
     site: str
@@ -464,24 +459,24 @@ class ScrapingLogger:
         # Create a unique logger name based on the log file
         logger_name = f"scraper_{log_file.replace('/', '_').replace('.', '_')}"
         self.logger = logging.getLogger(logger_name)
-        
+
         # Clear any existing handlers to avoid duplication
         self.logger.handlers.clear()
-        
+
         # Set level and format
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        
+
         # Add file handler
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(formatter)
         self.logger.addHandler(file_handler)
-        
+
         # Add console handler
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
-        
+
         # Prevent propagation to avoid double logging
         self.logger.propagate = False
 
@@ -491,7 +486,7 @@ class ScrapingLogger:
         """Log each selector attempt with detailed information"""
         status = "SUCCESS" if success else "FAILED"
         emoji = "🎯" if success else "❌"
-        
+
         if success and extracted_value:
             self.logger.info(
                 f"{emoji} {site} - {selector_type} - {status}: Found '{extracted_value}' using {selector[:100]}"
@@ -530,7 +525,6 @@ class ScrapingLogger:
             )
 
 
-# Retry Logic with Backoff (Phase 3.1)
 def retry_with_backoff(max_attempts=3, base_delay=1, max_delay=60, backoff_factor=2):
     """Decorator for retry logic with exponential backoff"""
 
@@ -578,7 +572,6 @@ def retry_with_backoff(max_attempts=3, base_delay=1, max_delay=60, backoff_facto
     return decorator
 
 
-# Rate Limiting (Phase 3.2)
 class RateLimiter:
     def __init__(self, min_delay=2, max_delay=5):
         self.min_delay = min_delay
