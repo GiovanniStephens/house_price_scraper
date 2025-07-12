@@ -48,23 +48,53 @@ def insert_prices(prices, client):
 
 if __name__ == "__main__":
     client = authenticate_gs_client()
-    values = scraper.scrape_all_house_prices()
+    results = scraper.scrape_all_house_prices()
     property_value_data = None
     regular_midpoints = []
-    for value in values:
-        if value[1] is None:
-            property_value_data = value
-        else:
-            regular_midpoints.append(value[1])
-    average = sum(regular_midpoints) / len(regular_midpoints)
-    if property_value_data:
-        lower_bound, upper_bound = property_value_data[0], property_value_data[2]
-        if lower_bound <= average <= upper_bound:
-            property_value_midpoint = average
-        else:
-            if average < lower_bound:
-                property_value_midpoint = lower_bound
+
+    for result in results:
+        # Check if this is a successful scraping result
+        if not result.success:
+            print(
+                f"Warning: Failed to scrape {result.site}: {'; '.join(result.errors)}"
+            )
+            continue
+
+        # Get the midpoint price
+        midpoint = result.prices.get("midpoint")
+
+        # Check if this is PropertyValue.co.nz (which has midpoint as None for external calculation)
+        if result.site == "propertyvalue.co.nz":
+            property_value_data = result
+        elif midpoint is not None:
+            regular_midpoints.append(midpoint)
+
+    # Calculate average from regular midpoints
+    if regular_midpoints:
+        average = sum(regular_midpoints) / len(regular_midpoints)
+
+        # Handle PropertyValue.co.nz special case
+        if property_value_data:
+            lower_bound = property_value_data.prices.get("lower")
+            upper_bound = property_value_data.prices.get("upper")
+
+            if lower_bound is not None and upper_bound is not None:
+                # Use average if it's within bounds, otherwise use the closest bound
+                if lower_bound <= average <= upper_bound:
+                    property_value_midpoint = average
+                else:
+                    if average < lower_bound:
+                        property_value_midpoint = lower_bound
+                    else:
+                        property_value_midpoint = upper_bound
+                regular_midpoints.append(property_value_midpoint)
+                print(
+                    f"PropertyValue.co.nz midpoint calculated as: ${property_value_midpoint:,.0f}"
+                )
             else:
-                property_value_midpoint = upper_bound
-        regular_midpoints.append(property_value_midpoint)
-    insert_prices(regular_midpoints, client)
+                print("Warning: PropertyValue.co.nz missing lower or upper bound")
+
+        print(f"Final midpoints: {[f'${price:,.0f}' for price in regular_midpoints]}")
+        insert_prices(regular_midpoints, client)
+    else:
+        print("Error: No valid midpoint prices found")
