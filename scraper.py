@@ -85,36 +85,38 @@ SELECTOR_STRATEGIES = {
     },
     "propertyvalue.co.nz": {
         "midpoint": [
-            {"type": "css", "selector": "[data-testid='pv-midpoint']"},
+            {"type": "css", "selector": "[testid='pv-midpoint']"},
             {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'property-value-mid')]",
             },
-            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*M?"},
+            {"type": "regex_fallback", "pattern": r"\$\d\.\d{1,2}M"},
         ],
         "upper": [
+            {"type": "css", "selector": "[testid='highEstimate']"},
             {
                 "type": "xpath",
                 "selector": '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]',
             },
-            {"type": "css", "selector": "[data-testid='pv-upper']"},
+            {"type": "css", "selector": "[testid='pv-upper']"},
             {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'property-value-upper')]",
             },
-            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*M?"},
+            {"type": "regex_fallback", "pattern": r"\$\d\.\d{1,2}M"},
         ],
         "lower": [
+            {"type": "css", "selector": "[testid='lowEstimate']"},
             {
                 "type": "xpath",
                 "selector": '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]',
             },
-            {"type": "css", "selector": "[data-testid='pv-lower']"},
+            {"type": "css", "selector": "[testid='pv-lower']"},
             {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'property-value-lower')]",
             },
-            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*M?"},
+            {"type": "regex_fallback", "pattern": r"\$\d\.\d{1,2}M"},
         ],
     },
     "realestate.co.nz": {
