@@ -121,15 +121,49 @@ def simulate_all_websites(results, num_simulations=10000):
     # Return the median of all aggregated samples for final robustness
     return np.median(aggregated_samples)
 
+def format_price_for_note(price):
+    """Format a price value for display in the note"""
+    if price is None:
+        return "N/A"
+    # Convert to millions for readability
+    price_in_millions = price / 1000000
+    return f"${price_in_millions:.2f}M"
+
+
+def build_note_from_results(results):
+    """Build a note string showing all domain estimates"""
+    note_lines = []
+
+    for result in results:
+        if not result.success:
+            continue
+
+        prices = result.prices
+        lower = format_price_for_note(prices.get("lower"))
+        midpoint = format_price_for_note(prices.get("midpoint"))
+        upper = format_price_for_note(prices.get("upper"))
+
+        # Format: "domain.com: low, mid, high"
+        note_lines.append(f"{result.site}: {lower}, {midpoint}, {upper}")
+
+    return "\n".join(note_lines)
+
+
 def insert_prices(results, client):
     sheet = client.open("Financial Position")
     sheet_instance = sheet.get_worksheet(1)
-    
+
     # Run Monte Carlo simulation across all websites
     simulated_price = simulate_all_websites(results)
-    
+
     # Insert the simulated value directly (not as a formula)
     sheet_instance.update_acell("C49", int(round(simulated_price)))
+
+    # Build and add note with all domain estimates
+    note_text = build_note_from_results(results)
+    if note_text:
+        # Update the note for cell C49
+        sheet_instance.update_note("C49", note_text)
 
 
 if __name__ == "__main__":
