@@ -91,37 +91,74 @@ SELECTOR_STRATEGIES = {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'property-value-mid')]",
             },
-            {"type": "regex_fallback", "pattern": r"\$\s*\d+\.?\d*\s*[Mm]"},
+            # More specific regex patterns for better matching
+            {"type": "regex_fallback", "pattern": r"\$\d+\.\d{1,2}M"},  # Matches $1.30M, $2.5M
+            {"type": "regex_fallback", "pattern": r"\$\d+M"},  # Matches $2M
+            {"type": "regex_fallback", "pattern": r"\$\s*\d+\.?\d*\s*[Mm]"},  # Generic fallback
         ],
         "upper": [
+            # Most reliable: testid attributes (already working according to user)
             {"type": "css", "selector": "[data-testid='highEstimate']"},
             {"type": "css", "selector": "[testid='highEstimate']"},
+            # New specific CSS selector with class names for robustness
+            {
+                "type": "css",
+                "selector": "#PropertyOverview > div > div.PropertyOverview_ContentCards__AA46q > div.PropertyOverview_TwoRows__9sB1I > div.EstimatedRange_EstimatedRange__1Jit5 > div.EstimatedRange_ConfidenceMarkers__2KFs8 > div.EstimatedRange_Estimates__18hC0 > div.w-50.text-right",
+            },
+            # Partial class matching as intermediate fallback
+            {
+                "type": "css",
+                "selector": ".EstimatedRange_Estimates__18hC0 > div.w-50.text-right",
+            },
+            # Generic testid fallbacks
+            {"type": "css", "selector": "[data-testid='pv-upper']"},
+            {"type": "css", "selector": "[testid='pv-upper']"},
+            # XPath with numeric indices (fragile, lower priority)
             {
                 "type": "xpath",
                 "selector": '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]',
             },
-            {"type": "css", "selector": "[data-testid='pv-upper']"},
-            {"type": "css", "selector": "[testid='pv-upper']"},
+            # Generic XPath fallback
             {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'property-value-upper')]",
             },
-            {"type": "regex_fallback", "pattern": r"\$\s*\d+\.?\d*\s*[Mm]"},
+            # More specific regex patterns (user reported format: $1.30M)
+            {"type": "regex_fallback", "pattern": r"\$\d+\.\d{1,2}M"},  # Matches $1.30M, $10.25M, $2.5M
+            {"type": "regex_fallback", "pattern": r"\$\d+M"},  # Matches $2M, $10M
+            {"type": "regex_fallback", "pattern": r"\$\s*\d+\.?\d*\s*[Mm]"},  # Generic fallback
         ],
         "lower": [
+            # Most reliable: testid attributes
             {"type": "css", "selector": "[data-testid='lowEstimate']"},
             {"type": "css", "selector": "[testid='lowEstimate']"},
+            # New specific CSS selector with class names for robustness
+            {
+                "type": "css",
+                "selector": "#PropertyOverview > div > div.PropertyOverview_ContentCards__AA46q > div.PropertyOverview_TwoRows__9sB1I > div.EstimatedRange_EstimatedRange__1Jit5 > div.EstimatedRange_ConfidenceMarkers__2KFs8 > div.EstimatedRange_Estimates__18hC0 > div.w-50.text-left",
+            },
+            # Partial class matching as intermediate fallback
+            {
+                "type": "css",
+                "selector": ".EstimatedRange_Estimates__18hC0 > div.w-50.text-left",
+            },
+            # Generic testid fallbacks
+            {"type": "css", "selector": "[data-testid='pv-lower']"},
+            {"type": "css", "selector": "[testid='pv-lower']"},
+            # XPath with numeric indices (fragile, lower priority)
             {
                 "type": "xpath",
                 "selector": '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]',
             },
-            {"type": "css", "selector": "[data-testid='pv-lower']"},
-            {"type": "css", "selector": "[testid='pv-lower']"},
+            # Generic XPath fallback
             {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'property-value-lower')]",
             },
-            {"type": "regex_fallback", "pattern": r"\$\s*\d+\.?\d*\s*[Mm]"},
+            # More specific regex patterns
+            {"type": "regex_fallback", "pattern": r"\$\d+\.\d{1,2}M"},  # Matches $1.30M, $2.5M
+            {"type": "regex_fallback", "pattern": r"\$\d+M"},  # Matches $2M
+            {"type": "regex_fallback", "pattern": r"\$\s*\d+\.?\d*\s*[Mm]"},  # Generic fallback
         ],
     },
     "realestate.co.nz": {
