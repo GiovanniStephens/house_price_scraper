@@ -68,16 +68,22 @@ def simulate_all_websites(results, num_simulations=10000):
     Simulate each website individually, then aggregate all simulations
     """
     all_samples = []
-    
+
     for result in results:
         if not result.success:
             continue
-            
+
         # Get the price data for this website
         lower = result.prices.get("lower")
-        midpoint = result.prices.get("midpoint") 
+        midpoint = result.prices.get("midpoint")
         upper = result.prices.get("upper")
-        
+
+        # Filter: exclude if only one data point is available
+        value_count = len([v for v in [lower, midpoint, upper] if v is not None])
+        if value_count < 2:
+            print(f"Skipping {result.site}: Only {value_count} data point(s) available, need at least 2 for simulation")
+            continue
+
         # Special handling for PropertyValue.co.nz (midpoint calculated externally)
         if result.site == "propertyvalue.co.nz":
             # Calculate midpoint from bounds like the original code does
@@ -89,16 +95,16 @@ def simulate_all_websites(results, num_simulations=10000):
                         other_mid = other_result.prices.get("midpoint")
                         if other_mid is not None:
                             other_midpoints.append(other_mid)
-                
+
                 if other_midpoints:
-                    average = sum(other_midpoints) / len(other_midpoints) 
+                    average = sum(other_midpoints) / len(other_midpoints)
                     if lower <= average <= upper:
                         midpoint = average
                     elif average < lower:
                         midpoint = lower
                     else:
                         midpoint = upper
-        
+
         # Run simulation for this website
         try:
             website_samples = simulate_single_website(lower, midpoint, upper, num_simulations)
@@ -131,7 +137,7 @@ def format_price_for_note(price):
 
 
 def build_note_from_results(results):
-    """Build a note string showing all domain estimates"""
+    """Build a note string showing all domain estimates with warnings for incomplete data"""
     note_lines = []
 
     for result in results:
@@ -139,12 +145,33 @@ def build_note_from_results(results):
             continue
 
         prices = result.prices
-        lower = format_price_for_note(prices.get("lower"))
-        midpoint = format_price_for_note(prices.get("midpoint"))
-        upper = format_price_for_note(prices.get("upper"))
+        lower = prices.get("lower")
+        midpoint = prices.get("midpoint")
+        upper = prices.get("upper")
+
+        # Count available values
+        value_count = len([v for v in [lower, midpoint, upper] if v is not None])
+
+        # Format prices for display
+        lower_formatted = format_price_for_note(lower)
+        midpoint_formatted = format_price_for_note(midpoint)
+        upper_formatted = format_price_for_note(upper)
 
         # Format: "domain.com: low, mid, high"
-        note_lines.append(f"{result.site}: {lower}, {midpoint}, {upper}")
+        note_lines.append(f"{result.site}: {lower_formatted}, {midpoint_formatted}, {upper_formatted}")
+
+        # Add warning if only one data point
+        if value_count < 2:
+            missing_parts = []
+            if lower is None:
+                missing_parts.append("LOWER")
+            if midpoint is None:
+                missing_parts.append("MIDPOINT")
+            if upper is None:
+                missing_parts.append("UPPER")
+
+            warning = f"  ⚠ WARNING: {', '.join(missing_parts)} MISSING - INSUFFICIENT DATA FOR SIMULATION"
+            note_lines.append(warning)
 
     return "\n".join(note_lines)
 
@@ -158,6 +185,28 @@ def insert_prices(results, client):
 
     # Insert the simulated value directly (not as a formula)
     sheet_instance.update_acell("C49", int(round(simulated_price)))
+
+    # Check if any results have incomplete data (less than 2 values)
+    has_incomplete_data = False
+    for result in results:
+        if result.success:
+            prices = result.prices
+            value_count = len([v for v in [prices.get("lower"), prices.get("midpoint"), prices.get("upper")] if v is not None])
+            if value_count < 2:
+                has_incomplete_data = True
+                break
+
+    # Apply pale red background if incomplete data exists
+    if has_incomplete_data:
+        # Pale red background color (RGB: 255, 230, 230)
+        cell_format = {
+            "backgroundColor": {
+                "red": 1.0,
+                "green": 0.9,
+                "blue": 0.9
+            }
+        }
+        sheet_instance.format("C49", cell_format)
 
     # Build and add note with all domain estimates
     note_text = build_note_from_results(results)
