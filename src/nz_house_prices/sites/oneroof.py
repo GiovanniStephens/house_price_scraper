@@ -149,7 +149,7 @@ class OneRoofSite(BaseSite):
 
         # Check for major NZ cities/regions
         REGIONS = [
-            "auckland", "auckland", "wellington", "christchurch",
+            "queenstown", "auckland", "wellington", "christchurch",
             "hamilton", "tauranga", "dunedin", "nelson", "napier",
             "rotorua", "invercargill", "palmerston north", "new plymouth",
         ]

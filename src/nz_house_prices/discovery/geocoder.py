@@ -284,15 +284,15 @@ def normalize_for_geocoding(address: str) -> str:
     # Known problematic suburb mappings that Nominatim doesn't recognize
     # Map them to recognizable region names
     SUBURB_MAPPINGS = {
-        "central basin": "Auckland",
-        "ponsonby-central": "Auckland",
-        "arrowtown": "Auckland",
-        "frankton": "Auckland",
-        "kelvin heights": "Auckland",
-        "jack's point": "Auckland",
-        "jacks point": "Auckland",
-        "lake hayes": "Auckland",
-        "lake hayes estate": "Auckland",
+        "wakatipu basin": "Queenstown",
+        "dalefield": "Queenstown",
+        "arrowtown": "Queenstown",
+        "frankton": "Queenstown",
+        "kelvin heights": "Queenstown",
+        "jack's point": "Queenstown",
+        "jacks point": "Queenstown",
+        "lake hayes": "Queenstown",
+        "lake hayes estate": "Queenstown",
     }
 
     # Apply suburb mappings

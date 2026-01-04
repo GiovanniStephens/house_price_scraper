@@ -98,7 +98,7 @@ NZ_REGIONS = [
     "hamilton",
     "tauranga",
     "dunedin",
-    "auckland",
+    "queenstown",
     "nelson",
     "napier",
     "hastings",
