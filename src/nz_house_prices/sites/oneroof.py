@@ -2,14 +2,16 @@
 
 import re
 import time
-from typing import List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Optional, Set, Tuple
 
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from nz_house_prices.sites.base import BaseSite, SearchResult
 from nz_house_prices.discovery.geocoder import geocode_address
+from nz_house_prices.sites.base import BaseSite, SearchResult
 
 
 class OneRoofSite(BaseSite):
@@ -142,7 +144,7 @@ class OneRoofSite(BaseSite):
             return None
 
         # Extract region from the display name
-        # Format is like "123 Example Street, Ponsonby, Auckland, Auckland-Lakes District, Otago, 9304, New Zealand"
+        # Format: "123 Example Street, Ponsonby, Auckland, Otago, New Zealand"
         display = location.display_name.lower()
 
         # Check for major NZ cities/regions
@@ -158,12 +160,177 @@ class OneRoofSite(BaseSite):
 
         return None
 
+    def _generate_search_variations(self, address: str) -> List[str]:
+        """Generate multiple search query variations for an address.
+
+        Different variations help when suburb names confuse the autocomplete.
+
+        Args:
+            address: The normalized address
+
+        Returns:
+            List of search query variations to try
+        """
+        variations = [address]  # Start with original
+
+        parts = [p.strip() for p in address.split(",")]
+        street_part = parts[0] if parts else address
+
+        # Get region from geocoding
+        region = self._get_region_from_geocode(address)
+
+        if region:
+            # Variation: street + region only (skip confusing suburb names)
+            simplified = f"{street_part} {region}"
+            if simplified.lower() != address.lower():
+                variations.append(simplified)
+
+            # Variation: full address + region appended
+            if region.lower() not in address.lower():
+                variations.append(f"{address}, {region}")
+
+        # Variation: progressively shorter queries
+        for i in range(len(parts) - 1, 0, -1):
+            shorter = ", ".join(parts[:i])
+            if shorter not in variations:
+                variations.append(shorter)
+
+        return variations
+
+    def _search_with_query(
+        self, search_input, query: str
+    ) -> List[Tuple[str, str]]:
+        """Execute a search query and return property links.
+
+        Args:
+            search_input: The search input element
+            query: Search query string
+
+        Returns:
+            List of (url, text) tuples from autocomplete
+        """
+        search_input.clear()
+        search_input.send_keys(query)
+
+        # Wait for property links to appear (max 5s, usually faster)
+        try:
+            WebDriverWait(self.driver, 5).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "a[href*='/property/']")
+                )
+            )
+        except TimeoutException:
+            # No results found for this query
+            return []
+
+        link_elements = self.driver.find_elements(
+            By.CSS_SELECTOR, "a[href*='/property/']"
+        )
+
+        property_links = []
+        for link in link_elements:
+            try:
+                href = link.get_attribute("href")
+                text = link.text.strip()
+                if href and "/property/" in href and text:
+                    property_links.append((href, text))
+            except StaleElementReferenceException:
+                # Element was updated by the page, skip it
+                continue
+
+        return property_links
+
+    def _find_best_across_variations(
+        self,
+        search_input,
+        variations: List[str],
+        target_address: str,
+    ) -> Tuple[Optional[str], str]:
+        """Search multiple variations and find the best match by geocoding.
+
+        Searches are done sequentially (browser constraint), but geocoding
+        of all results is done in parallel for speed.
+
+        Args:
+            search_input: The search input element
+            variations: List of search query variations
+            target_address: Original target address for geocoding comparison
+
+        Returns:
+            Tuple of (best_url, best_address_text)
+        """
+        # Geocode the target address once (cached via lru_cache)
+        target_location = geocode_address(target_address)
+
+        # Step 1: Collect all unique candidates from all variations
+        # Browser searches must be sequential (single driver)
+        candidates: List[Tuple[str, str]] = []  # (url, address_text)
+        seen_urls: Set[str] = set()
+
+        for query in variations:
+            property_links = self._search_with_query(search_input, query)
+
+            for url, text in property_links:
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+
+                # Extract address text
+                address_text = text.split("\n")[0].strip()
+                address_text = address_text.split("|")[0].strip()
+
+                if address_text:
+                    candidates.append((url, address_text))
+
+        if not candidates:
+            return None, ""
+
+        # Step 2: Batch geocode all candidates in parallel
+        # This is much faster than sequential geocoding (uses lru_cache + parallel)
+        results: Dict[str, Tuple[str, float]] = {}  # url -> (text, distance)
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            # Submit all geocoding tasks
+            future_to_candidate = {
+                executor.submit(geocode_address, addr): (url, addr)
+                for url, addr in candidates
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_candidate):
+                url, address_text = future_to_candidate[future]
+                try:
+                    result_location = future.result()
+                    distance = float("inf")
+                    if target_location and result_location:
+                        distance = target_location.distance_to(result_location)
+                    results[url] = (address_text, distance)
+
+                    # Early exit if we found a very close match (<0.5km)
+                    if distance < 0.5:
+                        # Cancel remaining futures and return immediately
+                        for f in future_to_candidate:
+                            f.cancel()
+                        return url, address_text
+                except Exception:
+                    # If geocoding fails, use infinite distance
+                    results[url] = (address_text, float("inf"))
+
+        # Return the closest match
+        if results:
+            sorted_results = sorted(results.items(), key=lambda x: x[1][1])
+            best_url, (best_text, _) = sorted_results[0]
+            return best_url, best_text
+
+        return None, ""
+
     def search_property(self, address: str) -> List[SearchResult]:
         """Search for a property by address on oneroof.co.nz.
 
-        Uses the search autocomplete to find property URLs directly.
-        If initial search doesn't find a good match, uses geocoding to
-        determine the region and retries with region appended.
+        Uses multiple search query variations to find the best match.
+        Searches are ranked by geographic distance to the target address
+        using geocoding, ensuring we find the correct property even when
+        the same street address exists in multiple cities.
 
         Args:
             address: The address to search for
@@ -174,13 +341,10 @@ class OneRoofSite(BaseSite):
         results = []
         normalized_address = self.normalize_address(address)
 
-        # Extract street number for checking if we found the right property
-        first_word = normalized_address.split()[0] if normalized_address else ""
-
         try:
             # Load the page
             self.driver.get(self.SEARCH_URL)
-            time.sleep(3)
+            time.sleep(2)  # Reduced from 3s
 
             wait = WebDriverWait(self.driver, 10)
 
@@ -190,62 +354,13 @@ class OneRoofSite(BaseSite):
                     (By.CSS_SELECTOR, "input[type='search'], input[placeholder*='address' i]")
                 )
             )
-
-            # Type the address
             search_input.click()
-            time.sleep(0.3)
-            search_input.clear()
-            search_input.send_keys(normalized_address)
-            time.sleep(2.5)  # Wait for autocomplete
 
-            # Find property links in autocomplete
-            property_links = []
-            link_elements = self.driver.find_elements(
-                By.CSS_SELECTOR, "a[href*='/property/']"
+            # Generate search variations and find best match across all
+            variations = self._generate_search_variations(normalized_address)
+            best_url, best_text = self._find_best_across_variations(
+                search_input, variations, normalized_address
             )
-
-            for link in link_elements:
-                href = link.get_attribute("href")
-                text = link.text.strip()
-                if href and "/property/" in href:
-                    property_links.append((href, text))
-
-            best_url, best_text = None, ""
-            if property_links:
-                best_url, best_text = self._find_best_match(
-                    property_links, normalized_address
-                )
-
-            # Check if we found a match that includes the street address
-            # If not, try geocoding to find the region and search again
-            found_street_match = best_text and first_word and best_text.lower().startswith(first_word.lower())
-
-            if not found_street_match:
-                # Try to geocode and get the region
-                region = self._get_region_from_geocode(normalized_address)
-                if region and region.lower() not in normalized_address.lower():
-                    # Retry search with region appended
-                    enhanced_query = f"{normalized_address}, {region}"
-
-                    search_input.clear()
-                    search_input.send_keys(enhanced_query)
-                    time.sleep(2.5)
-
-                    link_elements = self.driver.find_elements(
-                        By.CSS_SELECTOR, "a[href*='/property/']"
-                    )
-
-                    property_links = []
-                    for link in link_elements:
-                        href = link.get_attribute("href")
-                        text = link.text.strip()
-                        if href and "/property/" in href:
-                            property_links.append((href, text))
-
-                    if property_links:
-                        best_url, best_text = self._find_best_match(
-                            property_links, normalized_address
-                        )
 
             if best_url:
                 confidence = self._calculate_confidence(
@@ -259,48 +374,6 @@ class OneRoofSite(BaseSite):
                         site=self.SITE_NAME,
                     )
                 )
-
-            # If no results, try shorter query
-            if not results:
-                parts = [p.strip() for p in normalized_address.split(",")]
-                for i in range(len(parts) - 1, 0, -1):
-                    shorter_query = ", ".join(parts[:i])
-
-                    # Clear and retype
-                    search_input.clear()
-                    search_input.send_keys(shorter_query)
-                    time.sleep(2.5)
-
-                    # Check for property links again
-                    link_elements = self.driver.find_elements(
-                        By.CSS_SELECTOR, "a[href*='/property/']"
-                    )
-
-                    property_links = []
-                    for link in link_elements:
-                        href = link.get_attribute("href")
-                        text = link.text.strip()
-                        if href and "/property/" in href:
-                            property_links.append((href, text))
-
-                    if property_links:
-                        best_url, best_text = self._find_best_match(
-                            property_links, normalized_address
-                        )
-
-                        if best_url:
-                            confidence = self._calculate_confidence(
-                                normalized_address, best_text
-                            )
-                            results.append(
-                                SearchResult(
-                                    address=best_text,
-                                    url=best_url,
-                                    confidence=confidence,
-                                    site=self.SITE_NAME,
-                                )
-                            )
-                            break
 
         except Exception as e:
             print(f"Error searching oneroof.co.nz: {e}")
