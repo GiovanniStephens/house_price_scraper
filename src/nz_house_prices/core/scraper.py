@@ -3,7 +3,11 @@
 import time
 from typing import List, Optional
 
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
 
 from nz_house_prices.config.loader import ConfigurationError, load_config
 from nz_house_prices.core.driver import ensure_driver_health, init_driver
@@ -40,7 +44,18 @@ def scrape_house_prices(
 
     # Navigate to URL
     driver.get(url)
-    time.sleep(3)  # Wait for page to load
+
+    # Wait for page content to load (faster than fixed 3s sleep)
+    try:
+        # Wait for any price-related content to appear
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "[class*='price'], [class*='estimate'], [class*='value'], [data-testid*='price']")
+            )
+        )
+    except TimeoutException:
+        # Fallback: wait briefly for page to stabilize
+        time.sleep(1)
 
     # Determine site from URL
     site = None

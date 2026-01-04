@@ -1,11 +1,11 @@
 """High-level public API for NZ House Prices."""
 
-import time
 from typing import Dict, List, Optional
 
 from selenium.webdriver.remote.webdriver import WebDriver
 
 from nz_house_prices.core.driver import ensure_driver_health, init_driver
+from nz_house_prices.core.parallel import get_prices_parallel
 from nz_house_prices.core.scraper import scrape_house_prices
 from nz_house_prices.core.selectors import get_supported_sites
 from nz_house_prices.discovery.resolver import PropertyResolver
@@ -20,6 +20,7 @@ def get_prices(
     rate_limit: bool = True,
     min_delay: float = 2.0,
     max_delay: float = 5.0,
+    parallel: bool = True,
 ) -> Dict[str, PriceEstimate]:
     """Get house price estimates for an address from NZ real estate sites.
 
@@ -29,9 +30,10 @@ def get_prices(
         address: Full address string (e.g., "123 Example Street, Ponsonby, Auckland")
         sites: Optional list of sites to query. Defaults to all supported sites.
         use_cache: Whether to cache resolved URLs for faster future lookups.
-        rate_limit: Whether to apply rate limiting between requests.
-        min_delay: Minimum delay between requests in seconds.
-        max_delay: Maximum delay between requests in seconds.
+        rate_limit: Whether to apply rate limiting between requests (sequential mode only).
+        min_delay: Minimum delay between requests in seconds (sequential mode only).
+        max_delay: Maximum delay between requests in seconds (sequential mode only).
+        parallel: Whether to use parallel execution (default: True, ~3-5x faster).
 
     Returns:
         Dictionary mapping site names to PriceEstimate objects.
@@ -44,6 +46,47 @@ def get_prices(
         ...     print(f"{site}: ${estimate.midpoint:,.0f}")
     """
     target_sites = sites or get_supported_sites()
+
+    # Use parallel execution for faster results (default)
+    if parallel:
+        return get_prices_parallel(
+            address=address,
+            sites=target_sites,
+            use_cache=use_cache,
+        )
+
+    # Sequential execution (legacy mode)
+    return _get_prices_sequential(
+        address=address,
+        sites=target_sites,
+        use_cache=use_cache,
+        rate_limit=rate_limit,
+        min_delay=min_delay,
+        max_delay=max_delay,
+    )
+
+
+def _get_prices_sequential(
+    address: str,
+    sites: List[str],
+    use_cache: bool = True,
+    rate_limit: bool = True,
+    min_delay: float = 2.0,
+    max_delay: float = 5.0,
+) -> Dict[str, PriceEstimate]:
+    """Get prices using sequential execution (legacy mode).
+
+    Args:
+        address: Property address
+        sites: List of sites to query
+        use_cache: Whether to cache URLs
+        rate_limit: Whether to apply rate limiting
+        min_delay: Minimum delay between requests
+        max_delay: Maximum delay between requests
+
+    Returns:
+        Dictionary mapping site names to PriceEstimate objects
+    """
     results: Dict[str, PriceEstimate] = {}
 
     driver = None
@@ -54,7 +97,7 @@ def get_prices(
         driver = init_driver()
 
         # Resolve URLs for the address
-        with PropertyResolver(driver=driver, use_cache=use_cache, sites=target_sites) as resolver:
+        with PropertyResolver(driver=driver, use_cache=use_cache, sites=sites) as resolver:
             resolved = resolver.resolve(address)
 
         # Scrape each resolved URL

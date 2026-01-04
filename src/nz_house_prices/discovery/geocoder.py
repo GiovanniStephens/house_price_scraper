@@ -1,5 +1,6 @@
 """Geocoding utilities using Nominatim (OpenStreetMap)."""
 
+import functools
 import hashlib
 import json
 import logging
@@ -312,10 +313,12 @@ def normalize_for_geocoding(address: str) -> str:
     return address
 
 
+@functools.lru_cache(maxsize=1000)
 def geocode_address(address: str) -> Optional[GeocodedLocation]:
     """Convenience function to geocode an address.
 
     Automatically normalizes the address for better results.
+    Results are cached in memory (LRU cache) for fast repeated lookups.
 
     Args:
         address: Address string to geocode

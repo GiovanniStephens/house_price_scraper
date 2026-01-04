@@ -4,6 +4,7 @@ import re
 import time
 from typing import List, Optional, Tuple
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -159,14 +160,16 @@ class HomesSite(BaseSite):
             search_input.click()
             search_input.clear()
             search_input.send_keys(normalized_address)
-            time.sleep(2.5)  # Wait for autocomplete dropdown
 
-            # Find the dropdown results container
-            results_container = wait.until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, "[class*='addressResults']")
+            # Wait for autocomplete dropdown (WebDriverWait is faster than fixed sleep)
+            try:
+                results_container = wait.until(
+                    EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, "[class*='addressResults']")
+                    )
                 )
-            )
+            except TimeoutException:
+                return []
 
             # Find all individual result items within the container
             result_items = results_container.find_elements(
@@ -205,7 +208,16 @@ class HomesSite(BaseSite):
             # Click the best matching result to navigate
             if best_item:
                 best_item.click()
-                time.sleep(3)  # Wait for map page to load
+
+                # Wait for map page to load with property links
+                try:
+                    wait.until(
+                        EC.presence_of_element_located(
+                            (By.CSS_SELECTOR, "a[href*='/address/']")
+                        )
+                    )
+                except TimeoutException:
+                    pass
 
                 # Now on the map page, find the property tile link
                 property_links = self.driver.find_elements(

@@ -6,7 +6,7 @@ import sys
 from typing import List, Optional
 
 from nz_house_prices import __version__
-from nz_house_prices.api import get_prices, get_prices_from_urls
+from nz_house_prices.api import get_prices
 from nz_house_prices.core.scraper import scrape_all_house_prices
 from nz_house_prices.core.selectors import get_supported_sites
 from nz_house_prices.models.results import calculate_metrics
@@ -89,6 +89,11 @@ Examples:
         action="store_true",
         help="List supported sites and exit",
     )
+    parser.add_argument(
+        "--sequential",
+        action="store_true",
+        help="Disable parallel execution (slower but uses less memory)",
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -120,6 +125,7 @@ Examples:
             use_cache=not parsed_args.no_cache,
             rate_limit=not parsed_args.no_rate_limit,
             output_json=parsed_args.json,
+            parallel=not parsed_args.sequential,
         )
     elif parsed_args.config:
         # Config file mode (legacy)
@@ -150,6 +156,7 @@ def _run_address_search(
     use_cache: bool,
     rate_limit: bool,
     output_json: bool,
+    parallel: bool = True,
 ) -> int:
     """Run address-based search.
 
@@ -159,6 +166,7 @@ def _run_address_search(
         use_cache: Whether to use URL caching
         rate_limit: Whether to apply rate limiting
         output_json: Output as JSON
+        parallel: Whether to use parallel execution
 
     Returns:
         Exit code
@@ -174,6 +182,7 @@ def _run_address_search(
             sites=sites,
             use_cache=use_cache,
             rate_limit=rate_limit,
+            parallel=parallel,
         )
 
         if output_json:

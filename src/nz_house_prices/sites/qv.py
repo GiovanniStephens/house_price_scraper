@@ -4,6 +4,7 @@ import re
 import time
 from typing import List, Optional, Tuple
 
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -110,9 +111,8 @@ class QVSite(BaseSite):
             search_input.click()
             search_input.clear()
             search_input.send_keys(normalized_address)
-            time.sleep(2.5)  # Wait for autocomplete dropdown
 
-            # Look for search results container (data-cy="display-search-result")
+            # Wait for autocomplete dropdown (WebDriverWait is faster than fixed sleep)
             try:
                 results_container = wait.until(
                     EC.presence_of_element_located(
@@ -133,8 +133,16 @@ class QVSite(BaseSite):
 
                     if best_item:
                         # Click the best matching result
+                        current_url_before = self.driver.current_url
                         best_item.click()
-                        time.sleep(2)
+
+                        # Wait for URL change (faster than fixed 2s sleep)
+                        try:
+                            WebDriverWait(self.driver, 5).until(
+                                lambda d: d.current_url != current_url_before
+                            )
+                        except TimeoutException:
+                            pass
 
                         # Check the URL to see if we're on a property page
                         current_url = self.driver.current_url
@@ -150,7 +158,7 @@ class QVSite(BaseSite):
                                     site=self.SITE_NAME,
                                 )
                             )
-            except Exception:
+            except TimeoutException:
                 pass
 
             # If no autocomplete results, try clicking the Go button
@@ -160,8 +168,17 @@ class QVSite(BaseSite):
                         By.CSS_SELECTOR, ".c-address_search__button"
                     )
                     if go_button.is_enabled():
+                        current_url_before = self.driver.current_url
                         go_button.click()
-                        time.sleep(2)
+
+                        # Wait for URL change
+                        try:
+                            WebDriverWait(self.driver, 5).until(
+                                lambda d: d.current_url != current_url_before
+                            )
+                        except TimeoutException:
+                            pass
+
                         current_url = self.driver.current_url
                         if "/property" in current_url:
                             results.append(
