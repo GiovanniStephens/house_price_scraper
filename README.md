@@ -28,7 +28,13 @@ nz-house-prices "123 Example Street, Ponsonby, Auckland"
 nz-house-prices "123 Main St, Auckland" --sites homes.co.nz,qv.co.nz
 
 # Output as JSON
-nz-house-prices "123 Example Street" --json
+nz-house-prices "123 Example Street, Ponsonby" --json
+
+# Use sequential mode (slower, but uses less resources)
+nz-house-prices "123 Example Street" --sequential
+
+# Skip cache for fresh results
+nz-house-prices "123 Example Street" --no-cache
 
 # List supported sites
 nz-house-prices --list-sites
@@ -39,15 +45,18 @@ nz-house-prices --list-sites
 ```python
 from nz_house_prices import get_prices
 
-# Get prices from all sites
+# Get prices from all sites (parallel by default, ~20-25s)
 prices = get_prices("123 Example Street, Ponsonby, Auckland")
 
 for site, estimate in prices.items():
     if estimate.midpoint:
         print(f"{site}: ${estimate.midpoint:,.0f}")
+
+# Use sequential mode if needed
+prices = get_prices("123 Example Street, Auckland", parallel=False)
 ```
 
-### Context Manager (recommended for multiple lookups)
+### Context Manager (for multiple lookups)
 
 ```python
 from nz_house_prices import HousePriceScraper
@@ -62,11 +71,13 @@ with HousePriceScraper() as scraper:
 
 ## Features
 
-- Automatic address-to-URL resolution for all supported sites
-- URL caching for faster repeated lookups
-- Rate limiting to avoid overwhelming sites
-- Retry logic with exponential backoff
-- Both CLI and Python API interfaces
+- **Parallel scraping** - Queries all 5 sites concurrently (~20-25 seconds)
+- **Geocoding-based address matching** - Accurately finds properties even when suburb names differ between sites
+- **Automatic address-to-URL resolution** for all supported sites
+- **URL caching** for faster repeated lookups
+- **Rate limiting** to avoid overwhelming sites
+- **Retry logic** with exponential backoff
+- Both **CLI and Python API** interfaces
 
 ## Requirements
 

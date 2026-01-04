@@ -144,7 +144,7 @@ class OneRoofSite(BaseSite):
             return None
 
         # Extract region from the display name
-        # Format: "123 Example Street, Ponsonby, Auckland, Otago, New Zealand"
+        # Format: "123, Example Street, Ponsonby, Auckland, New Zealand"
         display = location.display_name.lower()
 
         # Check for major NZ cities/regions

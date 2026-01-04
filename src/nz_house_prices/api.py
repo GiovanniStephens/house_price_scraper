@@ -148,7 +148,7 @@ def get_prices_from_urls(
 
     Example:
         >>> results = get_prices_from_urls([
-        ...     "https://homes.co.nz/address/auckland/ponsonby/123 Example Street/xxxxx"
+        ...     "https://homes.co.nz/address/auckland/ponsonby/123-example-street/xxxxx"
         ... ])
         >>> print(results[0].prices["midpoint"])
     """

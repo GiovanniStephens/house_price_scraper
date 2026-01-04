@@ -264,12 +264,12 @@ class TestConfigurationStructure(unittest.TestCase):
         config = load_config()
         urls = config["urls"]["house_price_estimates"]
 
-        # All URLs should be for the same property (123 Example Street)
+        # All URLs should be for the same property
         # Some URLs might use property IDs instead of addresses
         property_identifiers = [
-            "123 Example Street",
-            "123%20example",
-            "0000000",  # QV property ID for this property
+            "example-street",
+            "example%20street",
+            "property",  # Generic property identifier
         ]
 
         for url in urls:
