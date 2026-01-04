@@ -51,6 +51,9 @@ class HomesSite(BaseSite):
     ) -> Tuple[Optional[object], str, str]:
         """Find the best matching result from autocomplete items.
 
+        Uses location-aware scoring to distinguish between properties
+        with the same street address in different suburbs/cities.
+
         Args:
             result_items: List of autocomplete result elements
             target_address: The address we're looking for
@@ -61,10 +64,13 @@ class HomesSite(BaseSite):
         target_unit = self._extract_unit_number(target_address)
         target_lower = target_address.lower()
 
+        # Extract target suburb/city for location matching
+        target_suburb, target_city = self._parse_target_location(target_address)
+
         best_match = None
         best_street = ""
         best_suburb = ""
-        best_score = -1
+        best_score = -1000  # Start very low to allow negative scores
 
         for item in result_items:
             try:
@@ -108,9 +114,13 @@ class HomesSite(BaseSite):
                 if street_core in target_core or target_core in street_core:
                     score += 20
 
-                # Check suburb match
-                if suburb_text and suburb_text.lower() in target_lower:
-                    score += 10
+                # Location-aware scoring using fuzzy matching
+                # Combine street and suburb for full result address
+                result_full_address = f"{street_text}, {suburb_text}"
+                location_score, has_location = self._calculate_location_score(
+                    target_suburb, target_city, result_full_address
+                )
+                score += location_score
 
                 if score > best_score:
                     best_score = score

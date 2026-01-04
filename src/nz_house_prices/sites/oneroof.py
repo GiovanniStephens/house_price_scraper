@@ -36,6 +36,9 @@ class OneRoofSite(BaseSite):
     ) -> Tuple[Optional[str], str]:
         """Find the best matching property from autocomplete results.
 
+        Uses location-aware scoring to distinguish between properties
+        with the same street address in different suburbs/cities.
+
         Args:
             property_links: List of (url, text) tuples from autocomplete
             target_address: The address we're looking for
@@ -47,9 +50,12 @@ class OneRoofSite(BaseSite):
         target_lower = target_address.lower()
         target_words = set(target_lower.split())
 
+        # Extract target suburb/city for location matching
+        target_suburb, target_city = self._parse_target_location(target_address)
+
         best_url = None
         best_text = ""
-        best_score = -1
+        best_score = -1000  # Start very low to allow negative scores
 
         for url, text in property_links:
             if not url or not text:
@@ -82,6 +88,14 @@ class OneRoofSite(BaseSite):
             first_word = target_lower.split()[0] if target_lower else ""
             if first_word and address_lower.startswith(first_word):
                 score += 50
+
+            # Location-aware scoring using fuzzy matching
+            # Also check the URL for location info (e.g., /auckland/ vs /auckland/)
+            url_and_text = f"{url} {address_text}"
+            location_score, has_location = self._calculate_location_score(
+                target_suburb, target_city, url_and_text
+            )
+            score += location_score
 
             if score > best_score:
                 best_score = score
