@@ -4,10 +4,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from rapidfuzz import fuzz
 from selenium.webdriver.remote.webdriver import WebDriver
 
-from nz_house_prices.discovery.address import NZ_REGIONS, parse_address
+from nz_house_prices.discovery.geocoder import geocode_address
 
 
 @dataclass
@@ -137,107 +136,85 @@ class BaseSite(ABC):
 
     def _calculate_location_score(
         self,
-        target_suburb: Optional[str],
-        target_city: Optional[str],
+        target_address: str,
         result_address: str,
-        threshold: int = 70,
+        max_distance_km: float = 5.0,
     ) -> Tuple[int, bool]:
-        """Calculate score based on location match using fuzzy matching.
+        """Calculate score based on geographic distance using geocoding.
 
         Args:
-            target_suburb: Expected suburb from the search address
-            target_city: Expected city from the search address
-            result_address: The full address returned from search results
-            threshold: Minimum fuzzy match score (0-100) to consider a match
+            target_address: The address we're searching for
+            result_address: The candidate address to compare
+            max_distance_km: Maximum distance to consider a valid match
 
         Returns:
-            Tuple of (score, has_location_match):
-            - score: +100 for strong suburb match, +50 for city match,
-                     -200 for location mismatch, 0 for no location info
-            - has_location_match: True if we found a matching location
+            Tuple of (score, is_close_match):
+            - score: +200 for very close (<0.5km), +100 for close (<2km),
+                     +50 for nearby (<5km), -200 for far, 0 if geocoding fails
+            - is_close_match: True if within max_distance_km
         """
-        if not result_address:
+        target_location = geocode_address(target_address)
+        if not target_location:
             return 0, False
 
-        result_lower = result_address.lower()
+        result_location = geocode_address(result_address)
+        if not result_location:
+            return 0, False
 
-        # Check for suburb match
-        suburb_matched = False
-        if target_suburb:
-            suburb_lower = target_suburb.lower()
-            # Try fuzzy matching against the result address
-            suburb_ratio = fuzz.partial_ratio(suburb_lower, result_lower)
-            if suburb_ratio >= threshold:
-                suburb_matched = True
+        distance = target_location.distance_to(result_location)
 
-        # Check for city match
-        city_matched = False
-        if target_city:
-            city_lower = target_city.lower()
-            city_ratio = fuzz.partial_ratio(city_lower, result_lower)
-            if city_ratio >= threshold:
-                city_matched = True
-
-        # Check for location mismatch - if result contains a different major city
-        # than what's in our target address
-        has_different_city = False
-        regions_in_result = []
-
-        # Find all major cities/regions in the result
-        for region in NZ_REGIONS:
-            if region in result_lower:
-                regions_in_result.append(region)
-
-        # Check if any region in the result conflicts with our target
-        if regions_in_result and (target_city or target_suburb):
-            # Build a combined target location string
-            target_parts = []
-            if target_suburb:
-                target_parts.append(target_suburb.lower())
-            if target_city:
-                target_parts.append(target_city.lower())
-            target_combined = " ".join(target_parts)
-
-            # Check if ANY of the regions in the result match our target
-            any_region_matches = False
-
-            for region in regions_in_result:
-                # Check if this region is in our target location info
-                if region in target_combined:
-                    any_region_matches = True
-                    break
-                # Also use fuzzy matching for the city
-                if target_city:
-                    city_region_ratio = fuzz.ratio(region, target_city.lower())
-                    if city_region_ratio >= 80:
-                        any_region_matches = True
-                        break
-
-            # If none of the regions match AND the result has a major city, it's a conflict
-            if not any_region_matches and not suburb_matched and not city_matched:
-                has_different_city = True
-
-        # Calculate final score
-        if has_different_city:
-            # Result is in a different city than what we're looking for
+        # Score based on distance
+        if distance < 0.5:
+            return 200, True
+        elif distance < 2.0:
+            return 100, True
+        elif distance <= max_distance_km:
+            return 50, True
+        else:
             return -200, False
 
-        score = 0
-        if suburb_matched:
-            score += 100
-        if city_matched:
-            score += 50
+    def _geocode_best_match(
+        self,
+        target_address: str,
+        candidates: List[Tuple[str, str, int]],
+        max_distance_km: float = 2.0,
+    ) -> Optional[Tuple[str, str, int, float]]:
+        """Use geocoding to find the best matching candidate by distance.
 
-        return score, suburb_matched or city_matched
-
-    def _parse_target_location(self, address: str) -> Tuple[Optional[str], Optional[str]]:
-        """Parse suburb and city from target address.
+        This is useful when multiple candidates have similar text-based scores
+        but are in different geographic locations (e.g., same street name in
+        different suburbs).
 
         Args:
-            address: The address to parse
+            target_address: The address we're searching for
+            candidates: List of (url, display_address, text_score) tuples
+            max_distance_km: Maximum distance to consider a valid match
 
         Returns:
-            Tuple of (suburb, city)
+            Tuple of (url, display_address, text_score, distance_km) for best match,
+            or None if geocoding fails or no candidates within max_distance
         """
-        parsed = parse_address(address)
-        return parsed.suburb, parsed.city
+        if not candidates:
+            return None
+
+        # Geocode the target address
+        target_location = geocode_address(target_address)
+        if not target_location:
+            # Fall back to text-based scoring if geocoding fails
+            return None
+
+        best_match = None
+        best_distance = float("inf")
+
+        for url, display_address, text_score in candidates:
+            # Geocode the candidate
+            candidate_location = geocode_address(display_address)
+            if candidate_location:
+                distance = target_location.distance_to(candidate_location)
+
+                # Only consider if within max distance
+                if distance <= max_distance_km and distance < best_distance:
+                    best_distance = distance
+                    best_match = (url, display_address, text_score, distance)
+
+        return best_match

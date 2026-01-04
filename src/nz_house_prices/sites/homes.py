@@ -64,9 +64,6 @@ class HomesSite(BaseSite):
         target_unit = self._extract_unit_number(target_address)
         target_lower = target_address.lower()
 
-        # Extract target suburb/city for location matching
-        target_suburb, target_city = self._parse_target_location(target_address)
-
         best_match = None
         best_street = ""
         best_suburb = ""
@@ -114,11 +111,10 @@ class HomesSite(BaseSite):
                 if street_core in target_core or target_core in street_core:
                     score += 20
 
-                # Location-aware scoring using fuzzy matching
-                # Combine street and suburb for full result address
+                # Geocoding-based location scoring
                 result_full_address = f"{street_text}, {suburb_text}"
-                location_score, has_location = self._calculate_location_score(
-                    target_suburb, target_city, result_full_address
+                location_score, _ = self._calculate_location_score(
+                    target_address, result_full_address
                 )
                 score += location_score
 

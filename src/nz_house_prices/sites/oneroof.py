@@ -9,6 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from nz_house_prices.sites.base import BaseSite, SearchResult
+from nz_house_prices.discovery.geocoder import geocode_address
 
 
 class OneRoofSite(BaseSite):
@@ -36,8 +37,9 @@ class OneRoofSite(BaseSite):
     ) -> Tuple[Optional[str], str]:
         """Find the best matching property from autocomplete results.
 
-        Uses location-aware scoring to distinguish between properties
-        with the same street address in different suburbs/cities.
+        Uses geocoding to accurately distinguish between properties with the
+        same street address in different locations. Falls back to text-based
+        matching if geocoding fails.
 
         Args:
             property_links: List of (url, text) tuples from autocomplete
@@ -50,12 +52,11 @@ class OneRoofSite(BaseSite):
         target_lower = target_address.lower()
         target_words = set(target_lower.split())
 
-        # Extract target suburb/city for location matching
-        target_suburb, target_city = self._parse_target_location(target_address)
+        # Extract street number for filtering candidates
+        first_word = target_lower.split()[0] if target_lower else ""
 
-        best_url = None
-        best_text = ""
-        best_score = -1000  # Start very low to allow negative scores
+        # Collect all candidates with their scores
+        candidates = []
 
         for url, text in property_links:
             if not url or not text:
@@ -85,15 +86,38 @@ class OneRoofSite(BaseSite):
             score += len(common_words) * 10
 
             # Bonus for matching street number at start
-            first_word = target_lower.split()[0] if target_lower else ""
             if first_word and address_lower.startswith(first_word):
                 score += 50
 
-            # Location-aware scoring using fuzzy matching
-            # Also check the URL for location info (e.g., /auckland/ vs /auckland/)
-            url_and_text = f"{url} {address_text}"
-            location_score, has_location = self._calculate_location_score(
-                target_suburb, target_city, url_and_text
+            candidates.append((url, address_text, score))
+
+        if not candidates:
+            return None, ""
+
+        # Filter to candidates that start with the same street number
+        street_matches = [c for c in candidates if c[1].lower().startswith(first_word)]
+
+        # If multiple candidates match the street number, use geocoding
+        if len(street_matches) > 1:
+            geocode_result = self._geocode_best_match(
+                target_address,
+                street_matches,
+                max_distance_km=5.0,
+            )
+            if geocode_result:
+                return geocode_result[0], geocode_result[1]
+
+        # Fall back to text-based scoring with geocoding-based location penalties
+        best_url = None
+        best_text = ""
+        best_score = -1000
+
+        for url, address_text, base_score in candidates:
+            score = base_score
+
+            # Add geocoding-based location scoring
+            location_score, _ = self._calculate_location_score(
+                target_address, address_text
             )
             score += location_score
 
@@ -104,10 +128,42 @@ class OneRoofSite(BaseSite):
 
         return best_url, best_text
 
+    def _get_region_from_geocode(self, address: str) -> Optional[str]:
+        """Get the major region/city from geocoding an address.
+
+        Args:
+            address: Address to geocode
+
+        Returns:
+            Region name like "Auckland", "Auckland", etc. or None
+        """
+        location = geocode_address(address)
+        if not location:
+            return None
+
+        # Extract region from the display name
+        # Format is like "123 Example Street, Ponsonby, Auckland, Auckland-Lakes District, Otago, 9304, New Zealand"
+        display = location.display_name.lower()
+
+        # Check for major NZ cities/regions
+        REGIONS = [
+            "auckland", "auckland", "wellington", "christchurch",
+            "hamilton", "tauranga", "dunedin", "nelson", "napier",
+            "rotorua", "invercargill", "palmerston north", "new plymouth",
+        ]
+
+        for region in REGIONS:
+            if region in display:
+                return region.title()
+
+        return None
+
     def search_property(self, address: str) -> List[SearchResult]:
         """Search for a property by address on oneroof.co.nz.
 
         Uses the search autocomplete to find property URLs directly.
+        If initial search doesn't find a good match, uses geocoding to
+        determine the region and retries with region appended.
 
         Args:
             address: The address to search for
@@ -117,6 +173,9 @@ class OneRoofSite(BaseSite):
         """
         results = []
         normalized_address = self.normalize_address(address)
+
+        # Extract street number for checking if we found the right property
+        first_word = normalized_address.split()[0] if normalized_address else ""
 
         try:
             # Load the page
@@ -151,23 +210,55 @@ class OneRoofSite(BaseSite):
                 if href and "/property/" in href:
                     property_links.append((href, text))
 
+            best_url, best_text = None, ""
             if property_links:
                 best_url, best_text = self._find_best_match(
                     property_links, normalized_address
                 )
 
-                if best_url:
-                    confidence = self._calculate_confidence(
-                        normalized_address, best_text
+            # Check if we found a match that includes the street address
+            # If not, try geocoding to find the region and search again
+            found_street_match = best_text and first_word and best_text.lower().startswith(first_word.lower())
+
+            if not found_street_match:
+                # Try to geocode and get the region
+                region = self._get_region_from_geocode(normalized_address)
+                if region and region.lower() not in normalized_address.lower():
+                    # Retry search with region appended
+                    enhanced_query = f"{normalized_address}, {region}"
+
+                    search_input.clear()
+                    search_input.send_keys(enhanced_query)
+                    time.sleep(2.5)
+
+                    link_elements = self.driver.find_elements(
+                        By.CSS_SELECTOR, "a[href*='/property/']"
                     )
-                    results.append(
-                        SearchResult(
-                            address=best_text,
-                            url=best_url,
-                            confidence=confidence,
-                            site=self.SITE_NAME,
+
+                    property_links = []
+                    for link in link_elements:
+                        href = link.get_attribute("href")
+                        text = link.text.strip()
+                        if href and "/property/" in href:
+                            property_links.append((href, text))
+
+                    if property_links:
+                        best_url, best_text = self._find_best_match(
+                            property_links, normalized_address
                         )
+
+            if best_url:
+                confidence = self._calculate_confidence(
+                    normalized_address, best_text
+                )
+                results.append(
+                    SearchResult(
+                        address=best_text,
+                        url=best_url,
+                        confidence=confidence,
+                        site=self.SITE_NAME,
                     )
+                )
 
             # If no results, try shorter query
             if not results:
