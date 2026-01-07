@@ -17,6 +17,10 @@ class UnsupportedPlatformError(Exception):
     pass
 
 
+# Cache ChromeDriver path to avoid repeated HTTP checks
+_cached_driver_path: str = None
+
+
 def init_driver(headless: bool = True) -> WebDriver:
     """Initialize WebDriver with cross-platform support.
 
@@ -35,13 +39,22 @@ def init_driver(headless: bool = True) -> WebDriver:
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
+    global _cached_driver_path
+
     system_arch = platform.machine().lower()
     system_os = platform.system().lower()
+
+    # Cache ChromeDriver path to avoid repeated HTTP checks
+    if _cached_driver_path is None and system_os in ["linux", "darwin", "windows"]:
+        if system_os == "linux" and system_arch in ["aarch64", "arm64"]:
+            pass  # ARM Linux doesn't use ChromeDriverManager
+        else:
+            _cached_driver_path = ChromeDriverManager().install()
 
     if system_os == "linux":
         if system_arch in ["x86_64", "amd64"]:
             driver = webdriver.Chrome(
-                service=Service(ChromeDriverManager().install()), options=options
+                service=Service(_cached_driver_path), options=options
             )
         elif system_arch in ["aarch64", "arm64"]:
             options.binary_location = "/usr/bin/chromium-browser"
@@ -50,11 +63,11 @@ def init_driver(headless: bool = True) -> WebDriver:
             driver = webdriver.Chrome(options=options)
     elif system_os == "darwin":  # macOS
         driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()), options=options
+            service=Service(_cached_driver_path), options=options
         )
     elif system_os == "windows":
         driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()), options=options
+            service=Service(_cached_driver_path), options=options
         )
     else:
         raise UnsupportedPlatformError(f"Unsupported platform: {system_os}-{system_arch}")

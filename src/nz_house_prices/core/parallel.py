@@ -277,8 +277,7 @@ class ParallelScraper:
             self._cache = URLCache()
 
         # Create a driver pool for API sites' price scraping
-        # Size 2 is enough since we only have 2 API sites
-        self._driver_pool = WebDriverPool(size=2, headless=self.headless)
+        self._driver_pool = WebDriverPool(size=3, headless=self.headless)
 
         # Pre-create drivers for Selenium sites (they run in parallel)
         for site in SELENIUM_SITES:
