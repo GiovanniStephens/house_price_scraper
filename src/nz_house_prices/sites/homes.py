@@ -67,12 +67,6 @@ class HomesSite(BaseSite):
                 if street_core in target_core or target_core in street_core:
                     score += 20
 
-                result_full_address = f"{street_text}, {suburb_text}"
-                location_score, _ = self._calculate_location_score(
-                    target_address, result_full_address
-                )
-                score += location_score
-
                 if score > best_score:
                     best_score = score
                     best_match = item
@@ -81,6 +75,16 @@ class HomesSite(BaseSite):
 
             except Exception:
                 continue
+
+        # Validate best match with geocoding (single call, not per-candidate)
+        if best_match and best_street:
+            result_full_address = f"{best_street}, {best_suburb}"
+            location_score, is_close = self._calculate_location_score(
+                target_address, result_full_address, max_distance_km=5.0
+            )
+            # Reject if the match is geographically too far or geocoding failed
+            if not is_close:
+                return None, "", ""
 
         return best_match, best_street, best_suburb
 

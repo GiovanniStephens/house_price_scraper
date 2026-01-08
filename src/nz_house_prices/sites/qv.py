@@ -66,6 +66,15 @@ class QVSite(BaseSite):
             except Exception:
                 continue
 
+        # Validate best match with geocoding (single call, not per-candidate)
+        if best_match and best_text:
+            location_score, is_close = self._calculate_location_score(
+                target_address, best_text, max_distance_km=5.0
+            )
+            # Reject if the match is geographically too far or geocoding failed
+            if not is_close:
+                return None, ""
+
         return best_match, best_text
 
     def search_property(self, address: str) -> List[SearchResult]:

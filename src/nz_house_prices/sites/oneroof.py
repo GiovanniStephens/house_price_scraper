@@ -29,10 +29,9 @@ class OneRoofSite(BaseSite):
     def _find_best_match(
         self, property_links: List[Tuple[str, str]], target_address: str
     ) -> Tuple[Optional[str], str]:
-        """Find the best matching property from autocomplete results."""
+        """Find the best matching property from autocomplete results using geocoding."""
         target_unit = self._extract_unit_number(target_address)
         target_lower = target_address.lower()
-        target_words = set(target_lower.split())
         first_word = target_lower.split()[0] if target_lower else ""
 
         candidates = []
@@ -57,10 +56,6 @@ class OneRoofSite(BaseSite):
                 score -= 10
 
             address_lower = address_text.lower()
-            address_words = set(address_lower.split())
-            common_words = target_words & address_words
-            score += len(common_words) * 10
-
             if first_word and address_lower.startswith(first_word):
                 score += 50
 
@@ -69,28 +64,25 @@ class OneRoofSite(BaseSite):
         if not candidates:
             return None, ""
 
-        street_matches = [c for c in candidates if c[1].lower().startswith(first_word)]
-
-        if len(street_matches) > 1:
-            geocode_result = self._geocode_best_match(
-                target_address, street_matches, max_distance_km=5.0
-            )
-            if geocode_result:
-                return geocode_result[0], geocode_result[1]
-
+        # Find best text match first
         best_url = None
         best_text = ""
         best_score = -1000
 
-        for url, address_text, base_score in candidates:
-            score = base_score
-            location_score, _ = self._calculate_location_score(target_address, address_text)
-            score += location_score
-
+        for url, address_text, score in candidates:
             if score > best_score:
                 best_score = score
                 best_url = url
                 best_text = address_text
+
+        # Validate best match with geocoding (single call, not per-candidate)
+        if best_url and best_text:
+            location_score, is_close = self._calculate_location_score(
+                target_address, best_text, max_distance_km=5.0
+            )
+            # Reject if the match is geographically too far or geocoding failed
+            if not is_close:
+                return None, ""
 
         return best_url, best_text
 
