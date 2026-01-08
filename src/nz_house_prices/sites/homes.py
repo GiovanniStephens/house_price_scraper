@@ -26,58 +26,71 @@ class HomesSite(BaseSite):
         return None
 
     def _find_best_matching_result(
-        self, result_items: list, target_address: str
-    ) -> Tuple[Optional[object], str, str]:
-        """Find the best matching result from autocomplete items."""
+        self, target_address: str
+    ) -> Tuple[Optional[int], str, str]:
+        """Find the best matching result from autocomplete items using JS evaluation.
+
+        Returns:
+            Tuple of (index, street, suburb) for best match, or (None, "", "") if no match.
+        """
+        # Use JavaScript to get all results at once (much faster than iterating locators)
+        results = self.page.evaluate('''() => {
+            const items = document.querySelectorAll("[class*='addressResult']:not([class*='addressResults'])");
+            return Array.from(items).map((item, index) => {
+                const street = item.querySelector("[class*='addressResultStreet']");
+                const suburb = item.querySelector("[class*='addressResultSuburb']");
+                return {
+                    index: index,
+                    street: street ? street.textContent.trim() : '',
+                    suburb: suburb ? suburb.textContent.trim() : ''
+                };
+            });
+        }''')
+
+        if not results:
+            return None, "", ""
+
         target_unit = self._extract_unit_number(target_address)
         target_lower = target_address.lower()
 
-        best_match = None
+        best_index = None
         best_street = ""
         best_suburb = ""
         best_score = -1000
 
-        for item in result_items:
-            try:
-                street_elem = item.locator("[class*='addressResultStreet']").first
-                street_text = street_elem.text_content() or ""
-                street_text = street_text.strip()
+        for item in results:
+            street_text = item.get("street", "")
+            suburb_text = item.get("suburb", "")
 
-                suburb_text = ""
-                suburb_elem = item.locator("[class*='addressResultSuburb']").first
-                if suburb_elem.count() > 0:
-                    suburb_text = suburb_elem.text_content() or ""
-                    suburb_text = suburb_text.strip()
-
-                score = 0
-                result_unit = self._extract_unit_number(street_text)
-
-                if target_unit and result_unit:
-                    if target_unit == result_unit:
-                        score += 100
-                    else:
-                        score -= 50
-                elif target_unit and not result_unit:
-                    score -= 10
-
-                street_lower = street_text.lower()
-                street_core = re.sub(r"^\d+[A-Za-z]?\s*/\s*", "", street_lower)
-                target_core = re.sub(r"^\d+[A-Za-z]?\s*/\s*", "", target_lower)
-
-                if street_core in target_core or target_core in street_core:
-                    score += 20
-
-                if score > best_score:
-                    best_score = score
-                    best_match = item
-                    best_street = street_text
-                    best_suburb = suburb_text
-
-            except Exception:
+            if not street_text:
                 continue
 
+            score = 0
+            result_unit = self._extract_unit_number(street_text)
+
+            if target_unit and result_unit:
+                if target_unit == result_unit:
+                    score += 100
+                else:
+                    score -= 50
+            elif target_unit and not result_unit:
+                score -= 10
+
+            street_lower = street_text.lower()
+            street_core = re.sub(r"^\d+[A-Za-z]?\s*/\s*", "", street_lower)
+            target_core = re.sub(r"^\d+[A-Za-z]?\s*/\s*", "", target_lower)
+
+            if street_core in target_core or target_core in street_core:
+                score += 20
+
+            if score > best_score:
+                best_score = score
+                best_index = item.get("index")
+                best_street = street_text
+                best_suburb = suburb_text
+
         # Validate best match with geocoding (single call, not per-candidate)
-        if best_match and best_street:
+        if best_index is not None and best_street:
             result_full_address = f"{best_street}, {best_suburb}"
             location_score, is_close = self._calculate_location_score(
                 target_address, result_full_address, max_distance_km=5.0
@@ -86,7 +99,7 @@ class HomesSite(BaseSite):
             if not is_close:
                 return None, "", ""
 
-        return best_match, best_street, best_suburb
+        return best_index, best_street, best_suburb
 
     def search_property(self, address: str) -> List[SearchResult]:
         """Search for a property by address on homes.co.nz."""
@@ -144,40 +157,21 @@ class HomesSite(BaseSite):
             except PlaywrightTimeoutError:
                 return []
 
-            # Find all result items
-            results_container = self.page.locator("[class*='addressResults']").first
-            result_items = results_container.locator(
-                "[class*='addressResult']:not([class*='addressResults'])"
-            ).all()
+            # Find best matching result using JS evaluation (fast)
+            best_index, street, suburb = self._find_best_matching_result(normalized_address)
 
-            if not result_items:
-                result_items = [results_container]
-
-            best_item, street, suburb = self._find_best_matching_result(
-                result_items, normalized_address
-            )
-
-            if best_item is None and result_items:
-                best_item = result_items[0]
-                try:
-                    street = (
-                        best_item.locator("[class*='addressResultStreet']").first.text_content()
-                        or ""
-                    )
-                except Exception:
-                    pass
-                try:
-                    suburb = (
-                        best_item.locator("[class*='addressResultSuburb']").first.text_content()
-                        or ""
-                    )
-                except Exception:
-                    pass
+            # If geocoding rejected all results, return empty
+            if best_index is None:
+                return []
 
             full_address = f"{street}, {suburb}".strip(", ")
 
-            if best_item:
-                best_item.click()
+            # Click the best result by index
+            result_items = self.page.locator(
+                "[class*='addressResult']:not([class*='addressResults'])"
+            ).all()
+            if best_index < len(result_items):
+                result_items[best_index].click()
 
                 # Wait for property links on map page
                 try:
