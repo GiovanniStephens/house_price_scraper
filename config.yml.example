@@ -1,0 +1,19 @@
+# Example configuration for nz-house-prices (legacy config mode)
+#
+# Usage: nz-house-prices --config config.yml
+#
+# Note: The recommended approach is to use address search instead:
+#   nz-house-prices "123 Example Street, Suburb, City"
+#
+# To use this config file:
+# 1. Copy this file to config.yml
+# 2. Replace the example URLs below with your property URLs
+# 3. Run: nz-house-prices --config config.yml
+
+urls:
+  house_price_estimates:
+    - "https://homes.co.nz/address/auckland/ponsonby/1-example-street/XXXXX"
+    - "https://www.qv.co.nz/property-search/property-details/0000000/"
+    - "https://www.oneroof.co.nz/property/auckland/ponsonby/1-example-street/XXXXX"
+    - "https://www.propertyvalue.co.nz/auckland/auckland-city/ponsonby-1011/1-example-street-ponsonby-1011-00000000"
+    - "https://www.realestate.co.nz/property/1-example-street-ponsonby-auckland/xxxxxxxx"

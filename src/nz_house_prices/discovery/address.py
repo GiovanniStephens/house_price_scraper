@@ -154,6 +154,15 @@ def parse_address(address: str) -> ParsedAddress:
     region = None
     postcode = None
 
+    # Check for "Unit X, Y Street" format BEFORE comma splitting
+    # This handles: "Unit 5, 100 Main Street, Suburb" → unit=5, rest="100 Main Street, Suburb"
+    unit_prefix_match = re.match(
+        r"^(?:unit|flat|apt|apartment)\s+(\d+[A-Za-z]*)\s*,\s*(.+)$", address, re.I
+    )
+    if unit_prefix_match:
+        unit = unit_prefix_match.group(1)
+        address = unit_prefix_match.group(2)  # Continue with "100 Main Street, ..."
+
     # Split by comma to separate street from suburb/city
     parts = [p.strip() for p in address.split(",")]
 
@@ -166,7 +175,9 @@ def parse_address(address: str) -> ParsedAddress:
         unit = unit_match.group(1)
         street_part = unit_match.group(2)
     else:
-        unit_match = re.match(r"^(?:unit|flat|apt|apartment)\s*(\d+[A-Za-z]?)\s*,?\s*(.+)$", street_part, re.I)
+        unit_match = re.match(
+            r"^(?:unit|flat|apt|apartment)\s*(\d+[A-Za-z]?)\s*,?\s*(.+)$", street_part, re.I
+        )
         if unit_match:
             unit = unit_match.group(1)
             street_part = unit_match.group(2)

@@ -36,9 +36,7 @@ def validate_config(config: Dict[str, Any]) -> bool:
         raise ConfigurationError("Configuration must contain 'urls' section")
 
     if "house_price_estimates" not in config["urls"]:
-        raise ConfigurationError(
-            "Configuration must contain 'urls.house_price_estimates' section"
-        )
+        raise ConfigurationError("Configuration must contain 'urls.house_price_estimates' section")
 
     urls = config["urls"]["house_price_estimates"]
     if not isinstance(urls, list):
@@ -82,9 +80,7 @@ def validate_config(config: Dict[str, Any]) -> bool:
     # Validate that we have strategies for all sites in config
     missing_strategies = found_sites - supported_sites
     if missing_strategies:
-        raise ConfigurationError(
-            f"No selector strategies defined for sites: {missing_strategies}"
-        )
+        raise ConfigurationError(f"No selector strategies defined for sites: {missing_strategies}")
 
     return True
 

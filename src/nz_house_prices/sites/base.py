@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from selenium.webdriver.remote.webdriver import WebDriver
+from playwright.sync_api import Page
 
 from nz_house_prices.discovery.geocoder import geocode_address
 
@@ -28,31 +28,36 @@ class BaseSite(ABC):
     SITE_DOMAIN: str = ""
     SEARCH_URL: str = ""
 
-    def __init__(self, driver: Optional[WebDriver] = None):
+    def __init__(self, page: Optional[Page] = None):
         """Initialize the site handler.
 
         Args:
-            driver: Optional WebDriver instance (will be created if not provided)
+            page: Optional Playwright Page instance
         """
-        self._driver = driver
-        self._owns_driver = False
+        self._page = page
+        self._owns_page = False
 
     @property
-    def driver(self) -> WebDriver:
-        """Get or create WebDriver instance."""
-        if self._driver is None:
-            from nz_house_prices.core.driver import init_driver
+    def page(self) -> Page:
+        """Get or create Page instance."""
+        if self._page is None:
+            from nz_house_prices.core.driver import create_page
 
-            self._driver = init_driver()
-            self._owns_driver = True
-        return self._driver
+            self._page = create_page()
+            self._owns_page = True
+        return self._page
 
     def close(self) -> None:
-        """Close the WebDriver if we own it."""
-        if self._owns_driver and self._driver is not None:
-            self._driver.quit()
-            self._driver = None
-            self._owns_driver = False
+        """Close the page if we own it."""
+        if self._owns_page and self._page is not None:
+            try:
+                context = self._page.context
+                self._page.close()
+                context.close()
+            except Exception:
+                pass
+            self._page = None
+            self._owns_page = False
 
     def __enter__(self) -> "BaseSite":
         """Context manager entry."""

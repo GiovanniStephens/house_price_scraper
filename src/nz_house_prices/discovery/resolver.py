@@ -4,10 +4,10 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from selenium.webdriver.remote.webdriver import WebDriver
+from playwright.sync_api import Page
 
-from nz_house_prices.core.driver import init_driver
-from nz_house_prices.discovery.address import normalize_address, parse_address
+from nz_house_prices.core.driver import create_page
+from nz_house_prices.discovery.address import normalize_address
 from nz_house_prices.discovery.cache import URLCache
 from nz_house_prices.sites import SITE_HANDLERS, BaseSite, SearchResult
 
@@ -30,30 +30,30 @@ class PropertyResolver:
 
     def __init__(
         self,
-        driver: Optional[WebDriver] = None,
+        page: Optional[Page] = None,
         use_cache: bool = True,
         sites: Optional[List[str]] = None,
     ):
         """Initialize the property resolver.
 
         Args:
-            driver: Optional WebDriver to reuse (creates new if not provided)
+            page: Optional Playwright Page to reuse (creates new if not provided)
             use_cache: Whether to use URL caching
             sites: Optional list of sites to query (default: all supported sites)
         """
-        self._driver = driver
-        self._owns_driver = False
+        self._page = page
+        self._owns_page = False
         self._cache = URLCache() if use_cache else None
         self._sites = sites or list(SITE_HANDLERS.keys())
         self._site_handlers: Dict[str, BaseSite] = {}
 
     @property
-    def driver(self) -> WebDriver:
-        """Get or create WebDriver instance."""
-        if self._driver is None:
-            self._driver = init_driver()
-            self._owns_driver = True
-        return self._driver
+    def page(self) -> Page:
+        """Get or create Page instance."""
+        if self._page is None:
+            self._page = create_page()
+            self._owns_page = True
+        return self._page
 
     def close(self) -> None:
         """Close resources."""
@@ -62,11 +62,16 @@ class PropertyResolver:
             handler.close()
         self._site_handlers.clear()
 
-        # Close driver if we own it
-        if self._owns_driver and self._driver is not None:
-            self._driver.quit()
-            self._driver = None
-            self._owns_driver = False
+        # Close page if we own it
+        if self._owns_page and self._page is not None:
+            try:
+                context = self._page.context
+                self._page.close()
+                context.close()
+            except Exception:
+                pass
+            self._page = None
+            self._owns_page = False
 
     def __enter__(self) -> "PropertyResolver":
         """Context manager entry."""
@@ -87,7 +92,7 @@ class PropertyResolver:
         """
         if site not in self._site_handlers:
             handler_class = SITE_HANDLERS[site]
-            self._site_handlers[site] = handler_class(driver=self.driver)
+            self._site_handlers[site] = handler_class(page=self.page)
         return self._site_handlers[site]
 
     def resolve(

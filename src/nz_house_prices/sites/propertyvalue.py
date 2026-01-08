@@ -2,7 +2,6 @@
 
 import re
 from typing import List, Optional
-from urllib.parse import quote
 
 import requests
 
@@ -30,9 +29,7 @@ class PropertyValueSite(BaseSite):
             return match.group(1)
         return None
 
-    def _find_best_match(
-        self, suggestions: list, target_address: str
-    ) -> Optional[dict]:
+    def _find_best_match(self, suggestions: list, target_address: str) -> Optional[dict]:
         """Find the best matching suggestion from API results."""
         target_unit = self._extract_unit_number(target_address)
         target_lower = target_address.lower()
@@ -132,9 +129,7 @@ class PropertyValueSite(BaseSite):
 
                 if url_path:
                     full_url = f"{self.SEARCH_URL}{url_path}"
-                    confidence = self._calculate_confidence(
-                        normalized_address, suggestion_text
-                    )
+                    confidence = self._calculate_confidence(normalized_address, suggestion_text)
                     results.append(
                         SearchResult(
                             address=suggestion_text,

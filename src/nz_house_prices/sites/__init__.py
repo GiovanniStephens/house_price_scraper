@@ -31,8 +31,7 @@ def get_site_handler(site_domain: str) -> type:
     """
     if site_domain not in SITE_HANDLERS:
         raise ValueError(
-            f"Unsupported site: {site_domain}. "
-            f"Supported sites: {list(SITE_HANDLERS.keys())}"
+            f"Unsupported site: {site_domain}. Supported sites: {list(SITE_HANDLERS.keys())}"
         )
     return SITE_HANDLERS[site_domain]
 

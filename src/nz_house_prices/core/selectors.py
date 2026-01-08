@@ -1,10 +1,9 @@
 """Selector strategies for extracting prices from real estate websites."""
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webdriver import WebDriver
+from playwright.sync_api import Page
 
 # Selector strategies for each supported site
 SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
@@ -53,7 +52,9 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
         "midpoint": [
             {
                 "type": "xpath",
-                "selector": '//*[@id="content"]/div/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div',
+                "selector": (
+                    '//*[@id="content"]/div/div[1]/div[1]/div[1]/div[2]/div[1]/div[1]/div[1]/div'
+                ),
             },
             {"type": "css", "selector": "[data-testid='qv-price']"},
             {"type": "xpath", "selector": "//div[contains(@class, 'qv-valuation')]"},
@@ -84,7 +85,9 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
             {"type": "css", "selector": "[testid='highEstimate']"},
             {
                 "type": "xpath",
-                "selector": '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]',
+                "selector": (
+                    '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[2]'
+                ),
             },
             {"type": "css", "selector": "[testid='pv-upper']"},
             {
@@ -97,7 +100,9 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
             {"type": "css", "selector": "[testid='lowEstimate']"},
             {
                 "type": "xpath",
-                "selector": '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]',
+                "selector": (
+                    '//*[@id="PropertyOverview"]/div/div[2]/div[4]/div[1]/div[2]/div[2]/div[1]'
+                ),
             },
             {"type": "css", "selector": "[testid='pv-lower']"},
             {
@@ -109,6 +114,12 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
     },
     "realestate.co.nz": {
         "midpoint": [
+            {"type": "css", "selector": "h4[data-test-reinz-valuation-badge-value]"},
+            {"type": "xpath", "selector": "//h4[@data-test-reinz-valuation-badge-value]"},
+            {
+                "type": "css",
+                "selector": "div.col-span-3 > div > div:nth-child(2) > h4",
+            },
             {
                 "type": "css",
                 "selector": "[data-test='reinz-valuation__price-range'] div:nth-child(2) h4",
@@ -117,8 +128,6 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
                 "type": "xpath",
                 "selector": "//div[@data-test='reinz-valuation__price-range']/div[2]//h4",
             },
-            {"type": "css", "selector": "[data-testid='reinz-price-mid']"},
-            {"type": "regex_fallback", "pattern": r"\$\d+\.\d+M"},
         ],
         "upper": [
             {
@@ -130,7 +139,7 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
                 "selector": "//div[@data-test='reinz-valuation__price-range']/div[3]//h4",
             },
             {"type": "css", "selector": "[data-testid='reinz-price-upper']"},
-            {"type": "regex_fallback", "pattern": r"\$\d+\.\d+M"},
+            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[KkMm]"},
         ],
         "lower": [
             {
@@ -142,7 +151,7 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
                 "selector": "//div[@data-test='reinz-valuation__price-range']/div[1]//h4",
             },
             {"type": "css", "selector": "[data-testid='reinz-price-lower']"},
-            {"type": "regex_fallback", "pattern": r"\$\d+\.\d+M"},
+            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[KkMm]"},
         ],
     },
     "oneroof.co.nz": {
@@ -157,35 +166,45 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
             },
             {
                 "type": "xpath",
-                "selector": "//div[contains(@class, 'text-3xl') and contains(@class, 'font-bold') and contains(@class, 'text-secondary')]",
+                "selector": (
+                    "//div[contains(@class, 'text-3xl') and "
+                    "contains(@class, 'font-bold') and contains(@class, 'text-secondary')]"
+                ),
             },
             {"type": "css", "selector": "[data-testid='oneroof-midpoint']"},
-            # Regex requires K/M suffix or 6+ digit number
-            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[MK]"},
+            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[MKmk]"},
         ],
         "upper": [
             {
                 "type": "css",
-                "selector": "div.text-center.font-medium.absolute.top-0.pt-10.right-0 > div.text-base.md\\:text-xl",
+                "selector": (
+                    "div.text-center.font-medium.absolute.top-0.pt-10.right-0 "
+                    "> div.text-base.md\\:text-xl"
+                ),
             },
             {
                 "type": "xpath",
-                "selector": "//div[contains(@class, 'right-0')]//div[contains(@class, 'text-base')]",
+                "selector": (
+                    "//div[contains(@class, 'right-0')]//div[contains(@class, 'text-base')]"
+                ),
             },
             {"type": "css", "selector": "[data-testid='oneroof-upper']"},
-            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[MK]"},
+            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[MKmk]"},
         ],
         "lower": [
             {
                 "type": "css",
-                "selector": "div.text-center.font-medium.absolute.top-0.pt-10.left-0 > div.text-base.md\\:text-xl",
+                "selector": (
+                    "div.text-center.font-medium.absolute.top-0.pt-10.left-0 "
+                    "> div.text-base.md\\:text-xl"
+                ),
             },
             {
                 "type": "xpath",
                 "selector": "//div[contains(@class, 'left-0')]//div[contains(@class, 'text-base')]",
             },
             {"type": "css", "selector": "[data-testid='oneroof-lower']"},
-            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[MK]"},
+            {"type": "regex_fallback", "pattern": r"\$\d+\.?\d*[MKmk]"},
         ],
     },
 }
@@ -194,11 +213,11 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
 class SelectorStrategy:
     """Multi-strategy selector system for robust element finding."""
 
-    def apply_strategy(self, driver: WebDriver, strategy: Dict[str, str]) -> Optional[str]:
+    def apply_strategy(self, page: Page, strategy: Dict[str, str]) -> Optional[str]:
         """Apply a single selector strategy.
 
         Args:
-            driver: Selenium WebDriver instance
+            page: Playwright Page instance
             strategy: Strategy configuration dict
 
         Returns:
@@ -206,37 +225,39 @@ class SelectorStrategy:
         """
         try:
             if strategy["type"] == "css":
-                element = driver.find_element(By.CSS_SELECTOR, strategy["selector"])
-                return element.text
+                locator = page.locator(strategy["selector"]).first
+                if locator.count() > 0:
+                    return locator.text_content()
             elif strategy["type"] == "xpath":
-                element = driver.find_element(By.XPATH, strategy["selector"])
-                return element.text
+                locator = page.locator(f"xpath={strategy['selector']}").first
+                if locator.count() > 0:
+                    return locator.text_content()
             elif strategy["type"] == "text_pattern":
-                page_source = driver.page_source
-                matches = re.findall(strategy["pattern"], page_source)
+                page_content = page.content()
+                matches = re.findall(strategy["pattern"], page_content)
                 return matches[0] if matches else None
             elif strategy["type"] == "regex_fallback":
-                page_source = driver.page_source
-                matches = re.findall(strategy["pattern"], page_source)
+                page_content = page.content()
+                matches = re.findall(strategy["pattern"], page_content)
                 return matches[0] if matches else None
         except Exception:
             return None
         return None
 
     def apply_cascading_strategies(
-        self, driver: WebDriver, strategies: List[Dict[str, str]]
+        self, page: Page, strategies: List[Dict[str, str]]
     ) -> Optional[str]:
         """Apply strategies in order until one succeeds.
 
         Args:
-            driver: Selenium WebDriver instance
+            page: Playwright Page instance
             strategies: List of strategy configurations
 
         Returns:
             First successful extraction result or None
         """
         for strategy in strategies:
-            result = self.apply_strategy(driver, strategy)
+            result = self.apply_strategy(page, strategy)
             if result:
                 return result
         return None

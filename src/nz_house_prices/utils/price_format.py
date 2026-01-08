@@ -1,7 +1,12 @@
 """Site-specific price formatting utilities."""
 
+from __future__ import annotations
+
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from nz_house_prices.models.results import ValidationResult
 
 
 class PriceValidator:

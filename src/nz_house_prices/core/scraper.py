@@ -3,14 +3,11 @@
 import time
 from typing import List, Optional
 
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from playwright.sync_api import Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from nz_house_prices.config.loader import ConfigurationError, load_config
-from nz_house_prices.core.driver import ensure_driver_health, init_driver
+from nz_house_prices.core.driver import BrowserManager
 from nz_house_prices.core.selectors import SELECTOR_STRATEGIES, SelectorStrategy
 from nz_house_prices.models.results import ScrapingResult
 from nz_house_prices.utils.logging import ScrapingLogger
@@ -20,7 +17,7 @@ from nz_house_prices.utils.retry import retry_with_backoff
 
 
 def scrape_house_prices(
-    driver: WebDriver,
+    page: Page,
     url: str,
     validate_prices: bool = False,
     enable_logging: bool = True,
@@ -28,7 +25,7 @@ def scrape_house_prices(
     """Scrape house prices using multi-strategy approach with fallbacks.
 
     Args:
-        driver: Selenium WebDriver instance
+        page: Playwright Page instance
         url: URL to scrape
         validate_prices: Whether to validate extracted prices
         enable_logging: Whether to enable detailed logging
@@ -43,19 +40,18 @@ def scrape_house_prices(
         logger = ScrapingLogger()
 
     # Navigate to URL
-    driver.get(url)
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
-    # Wait for page content to load (faster than fixed 3s sleep)
+    # Wait for page content to load
     try:
-        # Wait for any price-related content to appear
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "[class*='price'], [class*='estimate'], [class*='value'], [data-testid*='price']")
-            )
+        page.wait_for_selector(
+            "[class*='price'], [class*='estimate'], [class*='value'], [data-testid*='price']",
+            state="visible",
+            timeout=5000,
         )
-    except TimeoutException:
+    except PlaywrightTimeoutError:
         # Fallback: wait briefly for page to stabilize
-        time.sleep(1)
+        page.wait_for_timeout(1000)
 
     # Determine site from URL
     site = None
@@ -89,7 +85,7 @@ def scrape_house_prices(
 
         for strategy_info in strategies:
             try:
-                result = strategy.apply_strategy(driver, strategy_info)
+                result = strategy.apply_strategy(page, strategy_info)
                 if result:
                     if logger:
                         logger.log_extraction_attempt(
@@ -156,9 +152,22 @@ def scrape_house_prices(
         prices["midpoint"] = None
         extraction_methods = [m for m in extraction_methods if not m.startswith("midpoint:")]
         if logger:
-            logger.logger.info(
-                f"~ {site} - midpoint: Set to None for external calculation"
-            )
+            logger.logger.info(f"~ {site} - midpoint: Set to None for external calculation")
+
+    # Calculate midpoint from lower/upper if midpoint is None but both bounds exist
+    if prices.get("midpoint") is None and prices.get("lower") and prices.get("upper"):
+        try:
+            lower_val = prices["lower"]
+            upper_val = prices["upper"]
+            if isinstance(lower_val, (int, float)) and isinstance(upper_val, (int, float)):
+                prices["midpoint"] = int((lower_val + upper_val) / 2)
+                extraction_methods.append("midpoint:calculated")
+                if logger:
+                    logger.logger.info(
+                        f"~ {site} - midpoint: Calculated as {prices['midpoint']} from lower/upper"
+                    )
+        except (TypeError, ValueError):
+            pass  # Keep midpoint as None if calculation fails
 
     # Validate price relationships
     if validate_prices and len([p for p in prices.values() if p is not None]) >= 2:
@@ -189,7 +198,7 @@ def scrape_house_prices(
 
 @retry_with_backoff(max_attempts=3)
 def scrape_with_retry(
-    driver: WebDriver,
+    page: Page,
     url: str,
     validate_prices: bool = False,
     enable_logging: bool = True,
@@ -197,7 +206,7 @@ def scrape_with_retry(
     """Scrape with automatic retry logic.
 
     Args:
-        driver: Selenium WebDriver instance
+        page: Playwright Page instance
         url: URL to scrape
         validate_prices: Whether to validate extracted prices
         enable_logging: Whether to enable detailed logging
@@ -205,7 +214,7 @@ def scrape_with_retry(
     Returns:
         ScrapingResult with extracted prices and metadata
     """
-    return scrape_house_prices(driver, url, validate_prices, enable_logging)
+    return scrape_house_prices(page, url, validate_prices, enable_logging)
 
 
 def scrape_all_house_prices(
@@ -238,18 +247,6 @@ def scrape_all_house_prices(
 
     urls = config["urls"]["house_price_estimates"]
 
-    # Initialize driver with cross-platform support and retry logic
-    driver = None
-    for attempt in range(3):
-        try:
-            driver = init_driver()
-            break
-        except Exception as e:
-            print(f"Driver initialization attempt {attempt + 1} failed: {e}")
-            if attempt == 2:
-                raise Exception("Failed to initialize driver after 3 attempts")
-            time.sleep(2**attempt)  # Exponential backoff
-
     # Initialize rate limiter
     limiter = None
     if rate_limit:
@@ -257,24 +254,23 @@ def scrape_all_house_prices(
 
     results = []
 
-    try:
+    with BrowserManager() as browser_manager:
+        page = browser_manager.new_page()
+
         for url in urls:
             if limiter:
                 limiter.wait_if_needed()
 
-            # Ensure driver is healthy
-            driver = ensure_driver_health(driver)
-
             # Scrape with retry logic if enabled
             if enable_retry:
-                result = scrape_with_retry(driver, url, validate_prices, enable_logging)
+                result = scrape_with_retry(page, url, validate_prices, enable_logging)
             else:
-                result = scrape_house_prices(driver, url, validate_prices, enable_logging)
+                result = scrape_house_prices(page, url, validate_prices, enable_logging)
 
             results.append(result)
 
             # Print results summary
-            if not enable_logging:  # Only print if detailed logging is disabled
+            if not enable_logging:
                 print(f"Scraping data from: {url}")
                 print(f"Midpoint Price: {result.prices.get('midpoint')}")
                 print(f"Upper Price: {result.prices.get('upper')}")
@@ -282,9 +278,5 @@ def scrape_all_house_prices(
 
                 if not result.success:
                     print(f"Errors: {', '.join(result.errors)}")
-
-    finally:
-        if driver:
-            driver.quit()
 
     return results

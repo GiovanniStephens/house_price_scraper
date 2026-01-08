@@ -5,7 +5,7 @@ import time
 from functools import wraps
 from typing import Callable, TypeVar
 
-from selenium.common.exceptions import WebDriverException
+from playwright.sync_api import Error as PlaywrightError
 
 T = TypeVar("T")
 
@@ -35,7 +35,7 @@ def retry_with_backoff(
             for attempt in range(max_attempts):
                 try:
                     return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError, WebDriverException) as e:
+                except (ConnectionError, TimeoutError, PlaywrightError) as e:
                     last_exception = e
                     if attempt == max_attempts - 1:
                         raise e

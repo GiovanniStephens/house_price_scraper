@@ -44,9 +44,7 @@ class GeocodedLocation:
         Returns:
             Distance in kilometers
         """
-        return haversine_distance(
-            self.latitude, self.longitude, other.latitude, other.longitude
-        )
+        return haversine_distance(self.latitude, self.longitude, other.latitude, other.longitude)
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -132,9 +130,7 @@ class NominatimGeocoder:
             time.sleep(MIN_REQUEST_INTERVAL - elapsed)
         self._last_request_time = time.time()
 
-    def geocode(
-        self, address: str, country: str = "nz"
-    ) -> Optional[GeocodedLocation]:
+    def geocode(self, address: str, country: str = "nz") -> Optional[GeocodedLocation]:
         """Geocode an address to coordinates.
 
         Args:
@@ -268,7 +264,12 @@ def normalize_for_geocoding(address: str) -> str:
 
     # Remove common suffixes that confuse geocoders
     # e.g., "Auckland - City" -> "Auckland"
-    address = re.sub(r"\s*-\s*(City|Central|North|South|East|West|Waitakere|Papakura|Manukau)\b", "", address, flags=re.IGNORECASE)
+    address = re.sub(
+        r"\s*-\s*(City|Central|North|South|East|West|Waitakere|Papakura|Manukau)\b",
+        "",
+        address,
+        flags=re.IGNORECASE,
+    )
 
     # Handle suburb combinations with "/"
     # e.g., "Ponsonby Central" -> skip the suburb entirely

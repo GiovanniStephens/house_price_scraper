@@ -1,31 +1,19 @@
 """qv.co.nz site implementation."""
 
 import re
-import time
 from typing import List, Optional, Tuple
 
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from nz_house_prices.sites.base import BaseSite, SearchResult
 
 
 class QVSite(BaseSite):
-    """Handler for qv.co.nz property searches.
-
-    Note: QV's Vue.js search autocomplete has limited support for browser automation.
-    Address discovery may not work reliably. Direct URL scraping works fine.
-    """
+    """Handler for qv.co.nz property searches."""
 
     SITE_NAME = "qv.co.nz"
     SITE_DOMAIN = "qv.co.nz"
     SEARCH_URL = "https://www.qv.co.nz"
-
-    # Selectors for Vue.js based search
-    SEARCH_INPUT_SELECTOR = "input.c-address_search__field, [data-cy='address-search']"
 
     def _extract_unit_number(self, address: str) -> Optional[str]:
         """Extract unit number from an address string."""
@@ -50,14 +38,14 @@ class QVSite(BaseSite):
 
         for item in result_items:
             try:
-                item_text = item.text.strip()
+                item_text = item.text_content() or ""
+                item_text = item_text.strip()
                 if not item_text:
                     continue
 
                 score = 0
                 result_unit = self._extract_unit_number(item_text)
 
-                # Exact unit match is highest priority
                 if target_unit and result_unit:
                     if target_unit == result_unit:
                         score += 100
@@ -66,7 +54,6 @@ class QVSite(BaseSite):
                 elif target_unit and not result_unit:
                     score -= 10
 
-                # Check for address overlap
                 item_lower = item_text.lower()
                 if any(word in item_lower for word in target_lower.split()[:3]):
                     score += 20
@@ -82,104 +69,140 @@ class QVSite(BaseSite):
         return best_match, best_text
 
     def search_property(self, address: str) -> List[SearchResult]:
-        """Search for a property by address on qv.co.nz.
-
-        Args:
-            address: The address to search for
-
-        Returns:
-            List of SearchResult objects
-        """
+        """Search for a property by address on qv.co.nz."""
         results = []
         normalized_address = self.normalize_address(address)
 
         try:
-            # Navigate to the site
-            self.driver.get(self.SEARCH_URL)
-            time.sleep(3)  # Wait for Vue.js to mount
+            self.page.goto(self.SEARCH_URL, wait_until="domcontentloaded", timeout=30000)
 
-            wait = WebDriverWait(self.driver, 10)
-
-            # Find the search input using data-cy attribute
-            search_input = wait.until(
-                EC.element_to_be_clickable(
-                    (By.CSS_SELECTOR, "[data-cy='address-search'], input.c-address_search__field")
-                )
-            )
-
-            # Click and enter the address
-            search_input.click()
-            search_input.clear()
-            search_input.send_keys(normalized_address)
-
-            # Wait for autocomplete dropdown (WebDriverWait is faster than fixed sleep)
+            # Handle potential cookie consent or modals
             try:
-                results_container = wait.until(
-                    EC.presence_of_element_located(
-                        (By.CSS_SELECTOR, "[data-cy='display-search-result'], .c-address_search__results")
-                    )
-                )
-
-                # Find all result items
-                result_items = results_container.find_elements(
-                    By.CSS_SELECTOR, ".c-address_search__result_item"
-                )
-
-                if result_items:
-                    # Find best matching result
-                    best_item, item_text = self._find_best_matching_result(
-                        result_items, normalized_address
-                    )
-
-                    if best_item:
-                        # Click the best matching result
-                        current_url_before = self.driver.current_url
-                        best_item.click()
-
-                        # Wait for URL change (faster than fixed 2s sleep)
-                        try:
-                            WebDriverWait(self.driver, 5).until(
-                                lambda d: d.current_url != current_url_before
-                            )
-                        except TimeoutException:
-                            pass
-
-                        # Check the URL to see if we're on a property page
-                        current_url = self.driver.current_url
-                        if "/property" in current_url:
-                            confidence = self._calculate_confidence(
-                                normalized_address, item_text
-                            )
-                            results.append(
-                                SearchResult(
-                                    address=item_text or normalized_address,
-                                    url=current_url,
-                                    confidence=confidence,
-                                    site=self.SITE_NAME,
-                                )
-                            )
-            except TimeoutException:
+                close_btn = self.page.locator(
+                    "button:has-text('Accept'), button:has-text('Close'), "
+                    "[aria-label='Close'], .modal-close"
+                ).first
+                if close_btn.count() > 0:
+                    close_btn.click(timeout=2000)
+            except Exception:
                 pass
 
-            # If no autocomplete results, try clicking the Go button
+            # Find the search input - try multiple selectors
+            search_selectors = [
+                "[data-cy='address-search']",
+                "input.c-address_search__field",
+                "input[placeholder*='address' i]",
+                "input[placeholder*='search' i]",
+                "input[type='search']",
+                "#address-search",
+            ]
+
+            search_input = None
+            for selector in search_selectors:
+                try:
+                    locator = self.page.locator(selector).first
+                    if locator.count() > 0:
+                        locator.wait_for(state="visible", timeout=3000)
+                        search_input = locator
+                        break
+                except PlaywrightTimeoutError:
+                    continue
+
+            if search_input is None:
+                print("qv.co.nz: Could not find search input")
+                return []
+
+            search_input.click()
+            search_input.fill(normalized_address)
+
+            # Trigger autocomplete by pressing a key
+            search_input.press("Space")
+            search_input.press("Backspace")
+
+            # Small delay to let autocomplete populate
+            self.page.wait_for_timeout(2000)
+
+            # Wait for autocomplete dropdown - try multiple selectors
+            autocomplete_selectors = [
+                "[data-cy='display-search-result']",
+                ".c-address_search__results",
+                "[role='listbox']",
+                ".autocomplete-results",
+                "ul[class*='search']",
+            ]
+
+            autocomplete_found = False
+            for selector in autocomplete_selectors:
+                try:
+                    self.page.wait_for_selector(selector, state="visible", timeout=3000)
+                    autocomplete_found = True
+                    break
+                except PlaywrightTimeoutError:
+                    continue
+
+            if not autocomplete_found:
+                print("qv.co.nz: No autocomplete dropdown found")
+
+            # Try multiple result item selectors
+            result_selectors = [
+                ".c-address_search__result_item",
+                "[data-cy='display-search-result'] > *",
+                "[role='option']",
+                ".search-result-item",
+            ]
+
+            result_items = []
+            for selector in result_selectors:
+                items = self.page.locator(selector).all()
+                if items:
+                    result_items = items
+                    break
+
+            if result_items:
+                best_item, item_text = self._find_best_matching_result(
+                    result_items, normalized_address
+                )
+
+                if best_item:
+                    current_url_before = self.page.url
+                    best_item.click()
+
+                    # Wait for navigation
+                    try:
+                        self.page.wait_for_url(
+                            lambda url: url != current_url_before, timeout=5000
+                        )
+                    except PlaywrightTimeoutError:
+                        pass
+
+                    current_url = self.page.url
+                    if "/property" in current_url:
+                        confidence = self._calculate_confidence(normalized_address, item_text)
+                        results.append(
+                            SearchResult(
+                                address=item_text or normalized_address,
+                                url=current_url,
+                                confidence=confidence,
+                                site=self.SITE_NAME,
+                            )
+                        )
+
+            # If no autocomplete results, try the Go button
             if not results:
                 try:
-                    go_button = self.driver.find_element(
-                        By.CSS_SELECTOR, ".c-address_search__button"
-                    )
-                    if go_button.is_enabled():
-                        current_url_before = self.driver.current_url
+                    go_button = self.page.locator(".c-address_search__button").first
+                    if go_button.is_visible() and go_button.is_enabled():
+                        current_url_before = self.page.url
                         go_button.click()
 
-                        # Wait for URL change
                         try:
-                            WebDriverWait(self.driver, 5).until(
-                                lambda d: d.current_url != current_url_before
+                            self.page.wait_for_url(
+                                lambda url: url != current_url_before, timeout=5000
                             )
-                        except TimeoutException:
+                        except PlaywrightTimeoutError:
                             pass
 
-                        current_url = self.driver.current_url
+                        current_url = self.page.url
                         if "/property" in current_url:
                             results.append(
                                 SearchResult(
@@ -198,14 +221,7 @@ class QVSite(BaseSite):
         return sorted(results, key=lambda x: x.confidence, reverse=True)
 
     def get_property_url(self, address: str) -> Optional[str]:
-        """Get the best matching property URL.
-
-        Args:
-            address: The address to search for
-
-        Returns:
-            URL string or None if not found
-        """
+        """Get the best matching property URL."""
         results = self.search_property(address)
         if results and results[0].confidence > 0.5:
             return results[0].url

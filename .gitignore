@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 
 client_secret.json
+# User config (use config.yml.example as template)
+config.yml

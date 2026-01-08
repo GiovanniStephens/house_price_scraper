@@ -36,9 +36,7 @@ class RealEstateSite(BaseSite):
             return match.group(1)
         return None
 
-    def _find_best_match(
-        self, properties: list, target_address: str
-    ) -> Optional[dict]:
+    def _find_best_match(self, properties: list, target_address: str) -> Optional[dict]:
         """Find the best matching property from API results."""
         target_unit = self._extract_unit_number(target_address)
         target_lower = target_address.lower()

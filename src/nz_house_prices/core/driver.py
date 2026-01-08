@@ -1,126 +1,90 @@
-"""WebDriver management for cross-platform browser automation."""
+"""Browser management for Playwright-based automation."""
 
-import platform
-from typing import Tuple
+from typing import Optional
 
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
 
-class UnsupportedPlatformError(Exception):
-    """Raised when platform is not supported."""
+class BrowserManager:
+    """Manages Playwright browser instances."""
 
-    pass
+    def __init__(self, headless: bool = True):
+        """Initialize the browser manager.
+
+        Args:
+            headless: Whether to run browser in headless mode
+        """
+        self.headless = headless
+        self._playwright = None
+        self._browser: Optional[Browser] = None
+
+    def start(self) -> Browser:
+        """Start the browser.
+
+        Returns:
+            Browser instance
+        """
+        if self._browser is None:
+            self._playwright = sync_playwright().start()
+            self._browser = self._playwright.chromium.launch(headless=self.headless)
+        return self._browser
+
+    def new_context(self) -> BrowserContext:
+        """Create a new browser context.
+
+        Returns:
+            BrowserContext instance
+        """
+        browser = self.start()
+        user_agent = (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        return browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent=user_agent,
+        )
+
+    def new_page(self) -> Page:
+        """Create a new page in a new context.
+
+        Returns:
+            Page instance
+        """
+        context = self.new_context()
+        return context.new_page()
+
+    def close(self) -> None:
+        """Close the browser and cleanup."""
+        if self._browser:
+            self._browser.close()
+            self._browser = None
+        if self._playwright:
+            self._playwright.stop()
+            self._playwright = None
+
+    def __enter__(self) -> "BrowserManager":
+        """Context manager entry."""
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Context manager exit."""
+        self.close()
 
 
-# Cache ChromeDriver path to avoid repeated HTTP checks
-_cached_driver_path: str = None
+def create_page(headless: bool = True) -> Page:
+    """Create a new page with a fresh browser context.
 
-
-def init_driver(headless: bool = True) -> WebDriver:
-    """Initialize WebDriver with cross-platform support.
+    This is a convenience function for simple use cases.
+    For multiple pages, use BrowserManager directly.
 
     Args:
         headless: Whether to run browser in headless mode
 
     Returns:
-        Configured WebDriver instance
-
-    Raises:
-        UnsupportedPlatformError: If platform is not supported
+        Page instance (caller must close the browser context when done)
     """
-    options = webdriver.ChromeOptions()
-    if headless:
-        options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-
-    global _cached_driver_path
-
-    system_arch = platform.machine().lower()
-    system_os = platform.system().lower()
-
-    # Cache ChromeDriver path to avoid repeated HTTP checks
-    if _cached_driver_path is None and system_os in ["linux", "darwin", "windows"]:
-        if system_os == "linux" and system_arch in ["aarch64", "arm64"]:
-            pass  # ARM Linux doesn't use ChromeDriverManager
-        else:
-            _cached_driver_path = ChromeDriverManager().install()
-
-    if system_os == "linux":
-        if system_arch in ["x86_64", "amd64"]:
-            driver = webdriver.Chrome(
-                service=Service(_cached_driver_path), options=options
-            )
-        elif system_arch in ["aarch64", "arm64"]:
-            options.binary_location = "/usr/bin/chromium-browser"
-            driver = webdriver.Chrome(options=options)
-        else:
-            driver = webdriver.Chrome(options=options)
-    elif system_os == "darwin":  # macOS
-        driver = webdriver.Chrome(
-            service=Service(_cached_driver_path), options=options
-        )
-    elif system_os == "windows":
-        driver = webdriver.Chrome(
-            service=Service(_cached_driver_path), options=options
-        )
-    else:
-        raise UnsupportedPlatformError(f"Unsupported platform: {system_os}-{system_arch}")
-
-    return driver
-
-
-def check_driver_health(driver: WebDriver) -> bool:
-    """Check if driver is still responsive.
-
-    Args:
-        driver: WebDriver instance to check
-
-    Returns:
-        True if driver is healthy, False otherwise
-    """
-    try:
-        driver.current_url
-        return True
-    except Exception:
-        return False
-
-
-def ensure_driver_health(driver: WebDriver) -> WebDriver:
-    """Ensure driver is healthy, recreate if needed.
-
-    Args:
-        driver: WebDriver instance to check
-
-    Returns:
-        Healthy WebDriver instance (original or new)
-    """
-    if not check_driver_health(driver):
-        try:
-            driver.quit()
-        except Exception:
-            pass
-        return init_driver()
-    return driver
-
-
-def wait_for_element(
-    driver: WebDriver, selector: Tuple[str, str], timeout: int = 15
-) -> any:
-    """Wait for element with specified timeout.
-
-    Args:
-        driver: WebDriver instance
-        selector: Tuple of (By, selector_string)
-        timeout: Maximum wait time in seconds
-
-    Returns:
-        Located element
-    """
-    wait = WebDriverWait(driver, timeout)
-    return wait.until(EC.presence_of_element_located(selector))
+    manager = BrowserManager(headless=headless)
+    manager.start()
+    return manager.new_page()

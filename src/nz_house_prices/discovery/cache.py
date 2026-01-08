@@ -1,7 +1,6 @@
 """URL caching for faster repeated lookups."""
 
 import json
-import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -165,7 +164,13 @@ class URLCache:
             Dict mapping site names to URLs
         """
         results = {}
-        for site in ["homes.co.nz", "qv.co.nz", "propertyvalue.co.nz", "realestate.co.nz", "oneroof.co.nz"]:
+        for site in [
+            "homes.co.nz",
+            "qv.co.nz",
+            "propertyvalue.co.nz",
+            "realestate.co.nz",
+            "oneroof.co.nz",
+        ]:
             url = self.get(address, site)
             if url:
                 results[site] = url
@@ -185,8 +190,7 @@ class URLCache:
         else:
             # Invalidate all sites for this address
             keys_to_remove = [
-                k for k in self._cache.keys()
-                if k.startswith(address.lower().strip())
+                k for k in self._cache.keys() if k.startswith(address.lower().strip())
             ]
             for key in keys_to_remove:
                 del self._cache[key]

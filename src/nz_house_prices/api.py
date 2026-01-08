@@ -2,9 +2,9 @@
 
 from typing import Dict, List, Optional
 
-from selenium.webdriver.remote.webdriver import WebDriver
+from playwright.sync_api import Page
 
-from nz_house_prices.core.driver import ensure_driver_health, init_driver
+from nz_house_prices.core.driver import BrowserManager
 from nz_house_prices.core.parallel import get_prices_parallel
 from nz_house_prices.core.scraper import scrape_house_prices
 from nz_house_prices.core.selectors import get_supported_sites
@@ -88,16 +88,13 @@ def _get_prices_sequential(
         Dictionary mapping site names to PriceEstimate objects
     """
     results: Dict[str, PriceEstimate] = {}
-
-    driver = None
     limiter = RateLimiter(min_delay=min_delay, max_delay=max_delay) if rate_limit else None
 
-    try:
-        # Initialize driver
-        driver = init_driver()
+    with BrowserManager() as browser_manager:
+        page = browser_manager.new_page()
 
         # Resolve URLs for the address
-        with PropertyResolver(driver=driver, use_cache=use_cache, sites=sites) as resolver:
+        with PropertyResolver(page=page, use_cache=use_cache, sites=sites) as resolver:
             resolved = resolver.resolve(address)
 
         # Scrape each resolved URL
@@ -106,9 +103,7 @@ def _get_prices_sequential(
                 if limiter:
                     limiter.wait_if_needed()
 
-                driver = ensure_driver_health(driver)
-                result = scrape_house_prices(driver, url, enable_logging=False)
-
+                result = scrape_house_prices(page, url, enable_logging=False)
                 results[site] = PriceEstimate.from_scraping_result(result)
 
             except Exception as e:
@@ -119,10 +114,6 @@ def _get_prices_sequential(
                     lower=None,
                     upper=None,
                 )
-
-    finally:
-        if driver:
-            driver.quit()
 
     return results
 
@@ -155,25 +146,19 @@ def get_prices_from_urls(
     results: List[ScrapingResult] = []
     limiter = RateLimiter(min_delay=min_delay, max_delay=max_delay) if rate_limit else None
 
-    driver = None
-    try:
-        driver = init_driver()
+    with BrowserManager() as browser_manager:
+        page = browser_manager.new_page()
 
         for url in urls:
             try:
                 if limiter:
                     limiter.wait_if_needed()
 
-                driver = ensure_driver_health(driver)
-                result = scrape_house_prices(driver, url, enable_logging=False)
+                result = scrape_house_prices(page, url, enable_logging=False)
                 results.append(result)
 
             except Exception as e:
                 print(f"Error scraping {url}: {e}")
-
-    finally:
-        if driver:
-            driver.quit()
 
     return results
 
@@ -215,17 +200,20 @@ class HousePriceScraper:
         self.use_cache = use_cache
         self.sites = sites or get_supported_sites()
 
-        self._driver: Optional[WebDriver] = None
+        self._browser_manager: Optional[BrowserManager] = None
+        self._page: Optional[Page] = None
         self._limiter: Optional[RateLimiter] = None
         self._resolver: Optional[PropertyResolver] = None
 
     def __enter__(self) -> "HousePriceScraper":
         """Context manager entry."""
-        self._driver = init_driver(headless=self.headless)
+        self._browser_manager = BrowserManager(headless=self.headless)
+        self._browser_manager.start()
+        self._page = self._browser_manager.new_page()
         if self.rate_limit:
             self._limiter = RateLimiter(self.min_delay, self.max_delay)
         self._resolver = PropertyResolver(
-            driver=self._driver,
+            page=self._page,
             use_cache=self.use_cache,
             sites=self.sites,
         )
@@ -236,9 +224,10 @@ class HousePriceScraper:
         if self._resolver:
             self._resolver.close()
             self._resolver = None
-        if self._driver:
-            self._driver.quit()
-            self._driver = None
+        if self._browser_manager:
+            self._browser_manager.close()
+            self._browser_manager = None
+        self._page = None
 
     def scrape_address(self, address: str) -> Dict[str, PriceEstimate]:
         """Scrape prices for an address.
@@ -249,7 +238,7 @@ class HousePriceScraper:
         Returns:
             Dict mapping site names to PriceEstimate objects
         """
-        if self._driver is None:
+        if self._page is None:
             raise RuntimeError("Scraper not initialized. Use as context manager.")
 
         results: Dict[str, PriceEstimate] = {}
@@ -263,8 +252,7 @@ class HousePriceScraper:
                 if self._limiter:
                     self._limiter.wait_if_needed()
 
-                self._driver = ensure_driver_health(self._driver)
-                result = scrape_house_prices(self._driver, url, enable_logging=False)
+                result = scrape_house_prices(self._page, url, enable_logging=False)
                 results[site] = PriceEstimate.from_scraping_result(result)
 
             except Exception as e:
@@ -282,7 +270,7 @@ class HousePriceScraper:
         Returns:
             List of ScrapingResult objects
         """
-        if self._driver is None:
+        if self._page is None:
             raise RuntimeError("Scraper not initialized. Use as context manager.")
 
         results: List[ScrapingResult] = []
@@ -292,8 +280,7 @@ class HousePriceScraper:
                 if self._limiter:
                     self._limiter.wait_if_needed()
 
-                self._driver = ensure_driver_health(self._driver)
-                result = scrape_house_prices(self._driver, url, enable_logging=False)
+                result = scrape_house_prices(self._page, url, enable_logging=False)
                 results.append(result)
 
             except Exception as e:

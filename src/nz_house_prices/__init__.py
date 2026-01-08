@@ -31,12 +31,20 @@ Supported Sites:
 __version__ = "1.0.0"
 
 # Core functionality
-from nz_house_prices.core.driver import (
-    UnsupportedPlatformError,
-    check_driver_health,
-    ensure_driver_health,
-    init_driver,
+# High-level API (NEW)
+from nz_house_prices.api import (
+    HousePriceScraper,
+    get_prices,
+    get_prices_from_urls,
 )
+
+# Configuration
+from nz_house_prices.config.loader import (
+    ConfigurationError,
+    load_config,
+    validate_config,
+)
+from nz_house_prices.core.driver import BrowserManager, create_page
 from nz_house_prices.core.scraper import (
     scrape_all_house_prices,
     scrape_house_prices,
@@ -48,11 +56,14 @@ from nz_house_prices.core.selectors import (
     get_supported_sites,
 )
 
-# Configuration
-from nz_house_prices.config.loader import (
-    ConfigurationError,
-    load_config,
-    validate_config,
+# Discovery (URL resolution from addresses)
+from nz_house_prices.discovery import (
+    ParsedAddress,
+    PropertyResolver,
+    URLCache,
+    normalize_address,
+    parse_address,
+    resolve_property_urls,
 )
 
 # Models
@@ -62,6 +73,14 @@ from nz_house_prices.models.results import (
     ScrapingResult,
     ValidationResult,
     calculate_metrics,
+)
+
+# Site handlers
+from nz_house_prices.sites import (
+    SITE_HANDLERS,
+    BaseSite,
+    SearchResult,
+    get_site_handler,
 )
 
 # Utilities
@@ -78,31 +97,6 @@ from nz_house_prices.utils.price_format import (
 )
 from nz_house_prices.utils.rate_limit import RateLimiter
 from nz_house_prices.utils.retry import retry_with_backoff
-
-# High-level API (NEW)
-from nz_house_prices.api import (
-    HousePriceScraper,
-    get_prices,
-    get_prices_from_urls,
-)
-
-# Discovery (URL resolution from addresses)
-from nz_house_prices.discovery import (
-    ParsedAddress,
-    PropertyResolver,
-    URLCache,
-    normalize_address,
-    parse_address,
-    resolve_property_urls,
-)
-
-# Site handlers
-from nz_house_prices.sites import (
-    SITE_HANDLERS,
-    BaseSite,
-    SearchResult,
-    get_site_handler,
-)
 
 __all__ = [
     # Version
@@ -124,10 +118,8 @@ __all__ = [
     "SITE_HANDLERS",
     "get_site_handler",
     # Core
-    "init_driver",
-    "check_driver_health",
-    "ensure_driver_health",
-    "UnsupportedPlatformError",
+    "BrowserManager",
+    "create_page",
     "scrape_house_prices",
     "scrape_with_retry",
     "scrape_all_house_prices",
