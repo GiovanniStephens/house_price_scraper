@@ -82,7 +82,12 @@ with HousePriceScraper() as scraper:
 ## Requirements
 
 - Python 3.9+
-- Chrome browser (for Selenium WebDriver)
+- Playwright (installed automatically with the package)
+
+After installing, run once to set up browsers:
+```bash
+playwright install chromium
+```
 
 ## License
 
