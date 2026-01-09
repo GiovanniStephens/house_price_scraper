@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 
 from playwright.sync_api import Page
 
-from nz_house_prices.discovery.geocoder import geocode_address
+from nz_house_prices.discovery.geocoder import geocode_address, geocode_batch
 
 
 @dataclass
@@ -139,6 +139,72 @@ class BaseSite(ABC):
 
         return min(confidence, 0.99)  # Cap at 0.99 for non-exact matches
 
+    # NZ region/suburb mappings for city-aware pre-ranking
+    _NZ_REGIONS = {
+        "auckland": {"papakura", "manukau", "henderson", "mount eden", "ponsonby",
+                     "remuera", "epsom", "grey lynn", "newmarket", "parnell",
+                     "devonport", "takapuna", "albany", "botany", "howick"},
+        "queenstown": {"queenstown", "lake hayes", "arrowtown", "frankton",
+                       "kelvin heights", "jacks point", "wakatipu", "dalefield",
+                       "lake hayes estate", "jack's point"},
+        "wellington": {"wellington", "lower hutt", "upper hutt", "porirua",
+                       "petone", "karori", "miramar", "kilbirnie"},
+        "christchurch": {"christchurch", "riccarton", "papanui", "fendalton",
+                         "merivale", "sumner", "lyttelton", "new brighton"},
+        "hamilton": {"hamilton", "te rapa", "dinsdale", "hillcrest"},
+        "dunedin": {"dunedin", "mosgiel", "port chalmers"},
+    }
+
+    def _pre_rank_candidates(
+        self, candidates: List[str], target: str, top_n: int = 5
+    ) -> List[str]:
+        """Pre-rank candidates by keyword overlap and region matching.
+
+        This reduces the number of expensive geocoding calls by:
+        1. Scoring candidates by word overlap with target
+        2. Penalizing candidates from different regions (Auckland vs Queenstown)
+
+        Args:
+            candidates: List of candidate address strings
+            target: The target address to match against
+            top_n: Maximum number of candidates to return
+
+        Returns:
+            List of top N candidates sorted by score
+        """
+        target_lower = target.lower()
+        target_words = set(target_lower.replace(",", " ").split())
+
+        # Detect target region
+        target_region = None
+        for region, suburbs in self._NZ_REGIONS.items():
+            if region in target_lower or any(s in target_lower for s in suburbs):
+                target_region = region
+                break
+
+        scored = []
+        for candidate in candidates:
+            candidate_lower = candidate.lower()
+            candidate_words = set(candidate_lower.replace(",", " ").split())
+
+            # Base score: word overlap
+            score = len(target_words & candidate_words)
+
+            # Penalty: candidate in different region
+            if target_region:
+                for other_region, suburbs in self._NZ_REGIONS.items():
+                    if other_region != target_region:
+                        if other_region in candidate_lower or any(
+                            s in candidate_lower for s in suburbs
+                        ):
+                            score -= 10  # Heavy penalty for wrong region
+                            break
+
+            scored.append((candidate, score))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return [c for c, _ in scored[:top_n]]
+
     def _calculate_location_score(
         self,
         target_address: str,
@@ -158,7 +224,10 @@ class BaseSite(ABC):
                      +50 for nearby (<5km), -200 for far, 0 if geocoding fails
             - is_close_match: True if within max_distance_km
         """
-        target_location = geocode_address(target_address)
+        # Use pre-geocoded target if available (set by parallel.py)
+        target_location = getattr(self, "_target_location", None)
+        if not target_location:
+            target_location = geocode_address(target_address)
         if not target_location:
             return 0, False
 
@@ -202,8 +271,10 @@ class BaseSite(ABC):
         if not candidates:
             return None
 
-        # Geocode the target address
-        target_location = geocode_address(target_address)
+        # Use pre-geocoded target if available (set by parallel.py)
+        target_location = getattr(self, "_target_location", None)
+        if not target_location:
+            target_location = geocode_address(target_address)
         if not target_location:
             # Fall back to text-based scoring if geocoding fails
             return None
@@ -223,3 +294,64 @@ class BaseSite(ABC):
                     best_match = (url, display_address, text_score, distance)
 
         return best_match
+
+    def _batch_calculate_location_scores(
+        self,
+        target_address: str,
+        candidate_addresses: List[str],
+        max_distance_km: float = 5.0,
+    ) -> dict[str, Tuple[int, bool]]:
+        """Calculate location scores for multiple candidates using batch geocoding.
+
+        This method geocodes all addresses in parallel across multiple geocoding
+        services, significantly improving throughput compared to sequential geocoding.
+
+        Args:
+            target_address: The address we're searching for
+            candidate_addresses: List of candidate addresses to score
+            max_distance_km: Maximum distance to consider a valid match
+
+        Returns:
+            Dictionary mapping each candidate address to (score, is_close_match)
+            - score: +200 for very close (<0.5km), +100 for close (<2km),
+                     +50 for nearby (<5km), -200 for far, 0 if geocoding fails
+            - is_close_match: True if within max_distance_km
+        """
+        if not candidate_addresses:
+            return {}
+
+        # Use pre-geocoded target if available (set by parallel.py)
+        target_location = getattr(self, "_target_location", None)
+        if target_location:
+            # Only geocode candidates (target already done)
+            locations = geocode_batch(list(candidate_addresses))
+        else:
+            # Batch geocode all addresses (target + candidates)
+            all_addresses = [target_address] + list(candidate_addresses)
+            locations = geocode_batch(all_addresses)
+            target_location = locations.get(target_address)
+
+        if not target_location:
+            # Return neutral scores if target can't be geocoded
+            return {addr: (0, False) for addr in candidate_addresses}
+
+        results = {}
+        for addr in candidate_addresses:
+            result_location = locations.get(addr)
+            if not result_location:
+                results[addr] = (0, False)
+                continue
+
+            distance = target_location.distance_to(result_location)
+
+            # Score based on distance
+            if distance < 0.5:
+                results[addr] = (200, True)
+            elif distance < 2.0:
+                results[addr] = (100, True)
+            elif distance <= max_distance_km:
+                results[addr] = (50, True)
+            else:
+                results[addr] = (-200, False)
+
+        return results

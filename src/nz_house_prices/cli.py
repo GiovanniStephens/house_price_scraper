@@ -9,6 +9,7 @@ from nz_house_prices import __version__
 from nz_house_prices.api import get_prices
 from nz_house_prices.core.scraper import scrape_all_house_prices
 from nz_house_prices.core.selectors import get_supported_sites
+from nz_house_prices.discovery.geocoder import get_geocode_stats, reset_geocode_stats
 from nz_house_prices.models.results import calculate_metrics
 
 
@@ -94,6 +95,11 @@ Examples:
         action="store_true",
         help="Disable parallel execution (slower but uses less memory)",
     )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Show geocoding performance statistics",
+    )
 
     parsed_args = parser.parse_args(args)
 
@@ -126,6 +132,7 @@ Examples:
             rate_limit=not parsed_args.no_rate_limit,
             output_json=parsed_args.json,
             parallel=not parsed_args.sequential,
+            profile=parsed_args.profile,
         )
     elif parsed_args.config:
         # Config file mode (legacy)
@@ -157,6 +164,7 @@ def _run_address_search(
     rate_limit: bool,
     output_json: bool,
     parallel: bool = True,
+    profile: bool = False,
 ) -> int:
     """Run address-based search.
 
@@ -167,10 +175,15 @@ def _run_address_search(
         rate_limit: Whether to apply rate limiting
         output_json: Output as JSON
         parallel: Whether to use parallel execution
+        profile: Show geocoding statistics
 
     Returns:
         Exit code
     """
+    # Reset geocode stats for fresh profiling
+    if profile:
+        reset_geocode_stats()
+
     print(f"Searching for: {address}")
     if sites:
         print(f"Sites: {', '.join(sites)}")
@@ -224,13 +237,32 @@ def _run_address_search(
 
             if not found_any:
                 print("No prices found. The address may not be recognized by the sites.")
+                if profile:
+                    _print_geocode_stats()
                 return 1
+
+        # Print profiling stats if requested
+        if profile:
+            _print_geocode_stats()
 
         return 0
 
     except Exception as e:
         print(f"Error: {e}")
+        if profile:
+            _print_geocode_stats()
         return 1
+
+
+def _print_geocode_stats() -> None:
+    """Print geocoding profiling statistics."""
+    stats = get_geocode_stats()
+    print("\n--- Geocoding Stats ---")
+    print(f"  Total calls: {stats['calls']}")
+    print(f"  Cache hits: {stats['cache_hits']}")
+    print(f"  API calls: {stats['api_calls']}")
+    print(f"  Rate limit waits: {stats['rate_limit_waits']:.1f}s")
+    print(f"  Total geocode time: {stats['total_time']:.1f}s")
 
 
 def _run_config_mode(

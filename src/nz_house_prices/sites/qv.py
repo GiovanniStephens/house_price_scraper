@@ -66,13 +66,12 @@ class QVSite(BaseSite):
             except Exception:
                 continue
 
-        # Validate best match with geocoding (single call, not per-candidate)
+        # Soft validation: only reject if obviously wrong (>100km away)
         if best_match and best_text:
-            location_score, is_close = self._calculate_location_score(
-                target_address, best_text, max_distance_km=5.0
+            location_score, _ = self._calculate_location_score(
+                target_address, best_text, max_distance_km=100.0
             )
-            # Reject if the match is geographically too far or geocoding failed
-            if not is_close:
+            if location_score < -100:
                 return None, ""
 
         return best_match, best_text
@@ -83,7 +82,7 @@ class QVSite(BaseSite):
         normalized_address = self.normalize_address(address)
 
         try:
-            self.page.goto(self.SEARCH_URL, wait_until="domcontentloaded", timeout=30000)
+            self.page.goto(self.SEARCH_URL, wait_until="domcontentloaded", timeout=15000)
 
             # Handle potential cookie consent or modals
             try:
@@ -127,9 +126,6 @@ class QVSite(BaseSite):
             # Trigger autocomplete by pressing a key
             search_input.press("Space")
             search_input.press("Backspace")
-
-            # Small delay to let autocomplete populate
-            self.page.wait_for_timeout(2000)
 
             # Wait for autocomplete dropdown - try multiple selectors
             autocomplete_selectors = [

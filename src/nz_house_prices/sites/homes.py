@@ -1,10 +1,11 @@
 """homes.co.nz site implementation."""
 
-import re
+from math import atan2, cos, radians, sin, sqrt
 from typing import List, Optional, Tuple
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+from nz_house_prices.discovery.geocoder import geocode_batch
 from nz_house_prices.sites.base import BaseSite, SearchResult
 
 
@@ -15,20 +16,28 @@ class HomesSite(BaseSite):
     SITE_DOMAIN = "homes.co.nz"
     SEARCH_URL = "https://homes.co.nz"
 
-    def _extract_unit_number(self, address: str) -> Optional[str]:
-        """Extract unit number from an address string."""
-        match = re.match(r"^(\d+[A-Za-z]?)\s*/", address)
-        if match:
-            return match.group(1)
-        match = re.match(r"^(?:unit|flat|apt|apartment)\s*(\d+[A-Za-z]?)", address, re.I)
-        if match:
-            return match.group(1)
-        return None
+    def _calculate_distance_km(
+        self, lat1: float, lon1: float, lat2: float, lon2: float
+    ) -> float:
+        """Calculate distance between two points using Haversine formula."""
+        r = 6371  # Earth's radius in km
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        dlat, dlon = lat2 - lat1, lon2 - lon1
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        return r * 2 * atan2(sqrt(a), sqrt(1 - a))
 
     def _find_best_matching_result(
         self, target_address: str
     ) -> Tuple[Optional[int], str, str]:
-        """Find the best matching result from autocomplete items using JS evaluation.
+        """Find the best matching result using geographic distance.
+
+        Uses a two-step process for efficiency:
+        1. Pre-rank candidates by keyword overlap (fast, no API calls)
+        2. Batch geocode top candidates and target address (parallel API calls)
+        3. Return the geographically closest match
+
+        This handles suburb name variations automatically (e.g., 'Lake Hayes Estate'
+        vs 'Dalefield/Wakatipu Basin' for the same location).
 
         Returns:
             Tuple of (index, street, suburb) for best match, or (None, "", "") if no match.
@@ -50,56 +59,62 @@ class HomesSite(BaseSite):
         if not results:
             return None, "", ""
 
-        target_unit = self._extract_unit_number(target_address)
-        target_lower = target_address.lower()
-
-        best_index = None
-        best_street = ""
-        best_suburb = ""
-        best_score = -1000
-
+        # Build address map: full_address -> (index, street, suburb)
+        address_map: dict[str, Tuple[int, str, str]] = {}
         for item in results:
             street_text = item.get("street", "")
             suburb_text = item.get("suburb", "")
+            index = item.get("index")
+            if street_text:
+                full_address = f"{street_text}, {suburb_text}".strip(", ")
+                address_map[full_address] = (index, street_text, suburb_text)
 
-            if not street_text:
-                continue
+        if not address_map:
+            return None, "", ""
 
-            score = 0
-            result_unit = self._extract_unit_number(street_text)
+        # Pre-rank candidates by keyword overlap and region (top 3)
+        all_addresses = list(address_map.keys())
+        top_addresses = self._pre_rank_candidates(all_addresses, target_address, top_n=3)
 
-            if target_unit and result_unit:
-                if target_unit == result_unit:
-                    score += 100
-                else:
-                    score -= 50
-            elif target_unit and not result_unit:
-                score -= 10
+        # Use pre-geocoded target if available (set by parallel.py), otherwise geocode
+        target_location = getattr(self, "_target_location", None)
+        if target_location:
+            # Only geocode candidates (target already done)
+            locations = geocode_batch(top_addresses)
+        else:
+            # Fallback: geocode target + candidates together
+            addresses_to_geocode = [target_address] + top_addresses
+            locations = geocode_batch(addresses_to_geocode)
+            target_location = locations.get(target_address)
 
-            street_lower = street_text.lower()
-            street_core = re.sub(r"^\d+[A-Za-z]?\s*/\s*", "", street_lower)
-            target_core = re.sub(r"^\d+[A-Za-z]?\s*/\s*", "", target_lower)
+        if not target_location:
+            return None, "", ""
 
-            if street_core in target_core or target_core in street_core:
-                score += 20
+        # Find closest candidate by geographic distance
+        candidates = []
+        for addr in top_addresses:
+            loc = locations.get(addr)
+            if loc:
+                distance = self._calculate_distance_km(
+                    target_location.latitude,
+                    target_location.longitude,
+                    loc.latitude,
+                    loc.longitude,
+                )
+                index, street, suburb = address_map[addr]
+                candidates.append((index, street, suburb, distance))
 
-            if score > best_score:
-                best_score = score
-                best_index = item.get("index")
-                best_street = street_text
-                best_suburb = suburb_text
+        if not candidates:
+            return None, "", ""
 
-        # Validate best match with geocoding (single call, not per-candidate)
-        if best_index is not None and best_street:
-            result_full_address = f"{best_street}, {best_suburb}"
-            location_score, is_close = self._calculate_location_score(
-                target_address, result_full_address, max_distance_km=5.0
-            )
-            # Reject if the match is geographically too far or geocoding failed
-            if not is_close:
-                return None, "", ""
+        # Sort by distance (closest first)
+        candidates.sort(key=lambda x: x[3])
 
-        return best_index, best_street, best_suburb
+        # Return closest result if within 5km (generous for address variations)
+        if candidates[0][3] < 5.0:
+            return candidates[0][0], candidates[0][1], candidates[0][2]
+
+        return None, "", ""
 
     def search_property(self, address: str) -> List[SearchResult]:
         """Search for a property by address on homes.co.nz."""
@@ -107,46 +122,28 @@ class HomesSite(BaseSite):
         normalized_address = self.normalize_address(address)
 
         try:
-            self.page.goto(self.SEARCH_URL, wait_until="domcontentloaded", timeout=30000)
+            self.page.goto(self.SEARCH_URL, wait_until="domcontentloaded", timeout=15000)
 
-            # Handle potential cookie consent or modals
+            # Wait for the main search input to appear
             try:
-                close_btn = self.page.locator(
-                    "button:has-text('Accept'), button:has-text('Close'), "
-                    "[aria-label='Close'], .modal-close"
-                ).first
-                if close_btn.count() > 0:
-                    close_btn.click(timeout=2000)
-            except Exception:
-                pass
-
-            # Find and interact with search input - try multiple selectors
-            search_selectors = [
-                "#autocomplete-search",
-                "input[placeholder*='address' i]",
-                "input[placeholder*='search' i]",
-                "input[type='search']",
-                "input[name='search']",
-                "[data-testid='search-input']",
-                ".search-input input",
-            ]
-
-            search_input = None
-            for selector in search_selectors:
-                try:
-                    locator = self.page.locator(selector).first
-                    if locator.count() > 0:
-                        locator.wait_for(state="visible", timeout=3000)
+                self.page.wait_for_selector("#autocomplete-search", state="visible", timeout=10000)
+                search_input = self.page.locator("#autocomplete-search").first
+            except PlaywrightTimeoutError:
+                # Fallback to other selectors
+                search_input = None
+                for selector in ["input[placeholder*='address' i]", "input[type='search']"]:
+                    try:
+                        locator = self.page.locator(selector).first
+                        locator.wait_for(state="visible", timeout=2000)
                         search_input = locator
                         break
-                except PlaywrightTimeoutError:
-                    continue
+                    except PlaywrightTimeoutError:
+                        continue
 
             if search_input is None:
                 print("homes.co.nz: Could not find search input")
                 return []
 
-            search_input.click()
             search_input.fill(normalized_address)
 
             # Wait for autocomplete dropdown
@@ -157,10 +154,9 @@ class HomesSite(BaseSite):
             except PlaywrightTimeoutError:
                 return []
 
-            # Find best matching result using JS evaluation (fast)
+            # Find best matching result using JS evaluation and geocoding
             best_index, street, suburb = self._find_best_matching_result(normalized_address)
 
-            # If geocoding rejected all results, return empty
             if best_index is None:
                 return []
 
@@ -176,7 +172,7 @@ class HomesSite(BaseSite):
                 # Wait for property links on map page
                 try:
                     self.page.wait_for_selector(
-                        "a[href*='/address/']", state="visible", timeout=10000
+                        "a[href*='/address/']", state="visible", timeout=8000
                     )
                 except PlaywrightTimeoutError:
                     pass

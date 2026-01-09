@@ -10,6 +10,7 @@ from nz_house_prices.core.scraper import scrape_house_prices
 from nz_house_prices.core.selectors import get_supported_sites
 from nz_house_prices.discovery.address import normalize_address
 from nz_house_prices.discovery.cache import URLCache
+from nz_house_prices.discovery.geocoder import GeocodedLocation, geocode_address
 from nz_house_prices.models.results import PriceEstimate
 from nz_house_prices.sites import SITE_HANDLERS
 
@@ -75,13 +76,19 @@ def _resolve_url_api(site: str, address: str) -> Optional[str]:
     return None
 
 
-def _resolve_url_browser(site: str, address: str, headless: bool = True) -> Optional[str]:
+def _resolve_url_browser(
+    site: str,
+    address: str,
+    headless: bool = True,
+    target_location: Optional[GeocodedLocation] = None,
+) -> Optional[str]:
     """Resolve property URL using browser-based site handlers.
 
     Args:
         site: Site name
         address: Address to search for
         headless: Whether to run headless
+        target_location: Pre-geocoded target location (avoids redundant geocoding)
 
     Returns:
         Property URL or None
@@ -100,6 +107,9 @@ def _resolve_url_browser(site: str, address: str, headless: bool = True) -> Opti
             page = context.new_page()
 
             handler = handler_class(page=page)
+            # Pass pre-geocoded target location to avoid redundant geocoding
+            if target_location:
+                handler._target_location = target_location
             results = handler.search_property(address)
 
             context.close()
@@ -117,6 +127,7 @@ def _scrape_site_with_resolution(
     address: str,
     cache: Optional[URLCache],
     headless: bool,
+    target_location: Optional[GeocodedLocation] = None,
 ) -> PriceEstimate:
     """Resolve URL and scrape a site.
 
@@ -125,34 +136,52 @@ def _scrape_site_with_resolution(
         address: Address to search
         cache: Optional URL cache
         headless: Whether to run headless
+        target_location: Pre-geocoded target location (avoids redundant geocoding)
 
     Returns:
         PriceEstimate with results
     """
+    import time as timing_module
+
+    total_start = timing_module.perf_counter()
     normalized = normalize_address(address)
 
     # Check cache first
     url = None
+    cached = False
     if cache:
         url = cache.get(normalized, site)
+        if url:
+            cached = True
 
     # Resolve URL if not cached
+    resolve_start = timing_module.perf_counter()
     if not url:
         if site in API_SITES:
             url = _resolve_url_api(site, normalized)
         else:
-            url = _resolve_url_browser(site, normalized, headless)
+            url = _resolve_url_browser(site, normalized, headless, target_location)
 
         # Cache the URL
         if url and cache:
             cache.set(normalized, site, url, 0.9)
+    resolve_time = timing_module.perf_counter() - resolve_start
 
     if not url:
-        print(f"No URL resolved for {site}")
+        total_time = timing_module.perf_counter() - total_start
+        print(f"[TIMING] {site}: resolve={resolve_time:.1f}s (no URL), total={total_time:.1f}s")
         return PriceEstimate(source=site)
 
     # Scrape the property page
-    return _scrape_site(site, url, headless)
+    scrape_start = timing_module.perf_counter()
+    result = _scrape_site(site, url, headless)
+    scrape_time = timing_module.perf_counter() - scrape_start
+
+    total_time = timing_module.perf_counter() - total_start
+    cache_info = " [cached]" if cached else ""
+    print(f"[TIMING] {site}: resolve={resolve_time:.1f}s, scrape={scrape_time:.1f}s, total={total_time:.1f}s{cache_info}")
+
+    return result
 
 
 class ParallelScraper:
@@ -205,6 +234,10 @@ class ParallelScraper:
 
         start_time = time.time()
 
+        # Pre-geocode target address ONCE (shared across all site handlers)
+        # This saves ~4 redundant geocoding calls
+        target_location = geocode_address(address)
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {}
 
@@ -215,6 +248,7 @@ class ParallelScraper:
                     address,
                     self._cache,
                     self.headless,
+                    target_location,  # Pass pre-geocoded location
                 )
                 futures[future] = site
 
