@@ -114,15 +114,13 @@ SELECTOR_STRATEGIES: Dict[str, Dict[str, List[Dict[str, str]]]] = {
     },
     "realestate.co.nz": {
         "midpoint": [
-            {"type": "css", "selector": "h4[data-test-reinz-valuation-badge-value]"},
-            {"type": "xpath", "selector": "//h4[@data-test-reinz-valuation-badge-value]"},
-            {
-                "type": "css",
-                "selector": "div.col-span-3 > div > div:nth-child(2) > h4",
-            },
             {
                 "type": "css",
                 "selector": "[data-test='reinz-valuation__price-range'] div:nth-child(2) h4",
+            },
+            {
+                "type": "css",
+                "selector": "div.col-span-3 > div > div:nth-child(2) > h4",
             },
             {
                 "type": "xpath",
